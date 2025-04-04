@@ -13,29 +13,44 @@ let selectedPiece: HTMLElement | null = null;
 let selectedRow: number | null = null;
 let selectedCol: number | null = null;
 let offsetX = 0;
-let offsetY = 0; // Сдвиг фигуры от курсора
+let offsetY = 0;
+// Определяем цвета фигур
+const pieceColors = {
+  black: "#DAA520",
+  white: "#444",
+};
 
-const initialBoard: (string | null)[][] = [
-  ["rook", "knight", "bishop", "queen", "king", "bishop", "knight", "rook"], // Чёрные фигуры
-  Array(8).fill("pawn"), // Чёрные пешки
-  Array(8).fill(null), // Пустые клетки
-  Array(8).fill(null),
-  Array(8).fill(null),
-  Array(8).fill(null),
-  Array(8).fill("pawn"), // Белые пешки
-  ["rook", "knight", "bishop", "queen", "king", "bishop", "knight", "rook"], // Белые фигуры
+// Структура доски изменена для хранения цвета фигуры
+const initialBoard: { piece: string | null, color: 'black' | 'white' | null }[][] = [
+  [
+    { piece: "rook", color: 'black' }, { piece: "knight", color: 'black' }, { piece: "bishop", color: 'black' },
+    { piece: "queen", color: 'black' }, { piece: "king", color: 'black' }, { piece: "bishop", color: 'black' },
+    { piece: "knight", color: 'black' }, { piece: "rook", color: 'black' }
+  ], // Чёрные фигуры
+  Array(8).fill({ piece: "pawn", color: 'black' }), // Чёрные пешки
+  Array(8).fill({ piece: null, color: null }), // Пустые клетки
+  Array(8).fill({ piece: null, color: null }),
+  Array(8).fill({ piece: null, color: null }),
+  Array(8).fill({ piece: null, color: null }),
+  Array(8).fill({ piece: "pawn", color: 'white' }), // Белые пешки
+  [
+    { piece: "rook", color: 'white' }, { piece: "knight", color: 'white' }, { piece: "bishop", color: 'white' },
+    { piece: "queen", color: 'white' }, { piece: "king", color: 'white' }, { piece: "bishop", color: 'white' },
+    { piece: "knight", color: 'white' }, { piece: "rook", color: 'white' }
+  ], // Белые фигуры
 ];
 
 const app = document.querySelector<HTMLDivElement>("#app");
 
 if (app) {
   app.classList.add("flex", "justify-center", "items-center", "h-screen", "bg-gray-200");
-  renderBoard();
+  initBoard(); // Инициализация доски при загрузке
 } else {
   console.error("Элемент #app не найден!");
 }
 
-function renderBoard() {
+// Функция для начальной инициализации доски и размещения фигур
+function initBoard() {
   if (!app) return;
 
   app.innerHTML = `
@@ -43,16 +58,15 @@ function renderBoard() {
       ${initialBoard
         .flatMap((row, rowIndex) =>
           row.map(
-            (piece, colIndex) => `
+            ({ piece, color }, colIndex) => `
               <div class="relative flex items-center justify-center w-10 h-10
                 ${(rowIndex + colIndex) % 2 === 0 ? "bg-white" : "bg-black"}"
                 data-row="${rowIndex}" data-col="${colIndex}">
                 ${
                   piece
-                    ? `<span class="text-xl cursor-pointer select-none"
-                        style="color: ${
-                          rowIndex < 2 ? "#DAA520" : "#444"
-                        }">
+                    ? `<span class="text-xl cursor-pointer select-none piece"
+                        style="color: ${piece && color ? pieceColors[color] : "#444"}"
+                        data-piece="${piece}">
                         ${figures[piece as keyof typeof figures]}
                       </span>`
                     : ""
@@ -64,7 +78,43 @@ function renderBoard() {
     </div>
   `;
 
-  // Добавляем обработчик события для мousedown
+  // Добавляем обработчик события для mousedown
+  document.querySelectorAll("[data-row][data-col]").forEach((cell) => {
+    (cell as HTMLElement).addEventListener("mousedown", onMouseDown);
+  });
+}
+
+// Функция для рендеринга доски при перемещении фигур
+function renderBoard() {
+  if (!app) return;
+
+  // Восстановление состояния доски с актуальными фигурами
+  app.innerHTML = `
+    <div class="grid grid-cols-8 border-4 border-gray-800">
+      ${initialBoard
+        .flatMap((row, rowIndex) =>
+          row.map(
+            ({ piece, color }, colIndex) => `
+              <div class="relative flex items-center justify-center w-10 h-10
+                ${(rowIndex + colIndex) % 2 === 0 ? "bg-white" : "bg-black"}"
+                data-row="${rowIndex}" data-col="${colIndex}">
+                ${
+                  piece
+                    ? `<span class="text-xl cursor-pointer select-none piece"
+                        style="color: ${piece && color ? pieceColors[color] : "#444"}"
+                        data-piece="${piece}">
+                        ${figures[piece as keyof typeof figures]}
+                      </span>`
+                    : ""
+                }
+              </div>`
+          )
+        )
+        .join("")}
+    </div>
+  `;
+
+  // Добавляем обработчик события для mousedown
   document.querySelectorAll("[data-row][data-col]").forEach((cell) => {
     (cell as HTMLElement).addEventListener("mousedown", onMouseDown);
   });
@@ -77,7 +127,7 @@ function onMouseDown(event: MouseEvent) {
 
   const row = Number(cell.dataset.row);
   const col = Number(cell.dataset.col);
-  const piece = initialBoard[row][col];
+  const { piece } = initialBoard[row][col];
   if (!piece) return;
 
   console.log(`Piece selected: ${piece} at [${row}, ${col}]`);
@@ -125,7 +175,7 @@ function onMouseUp(event: MouseEvent) {
   console.log(`Moving piece from [${selectedRow}, ${selectedCol}] to [${newRow}, ${newCol}]`);
 
   initialBoard[newRow][newCol] = initialBoard[selectedRow][selectedCol];
-  initialBoard[selectedRow][selectedCol] = null;
+  initialBoard[selectedRow][selectedCol] = { piece: null, color: null };
 
   console.log("Updated board state:", initialBoard);
 
@@ -134,7 +184,7 @@ function onMouseUp(event: MouseEvent) {
   selectedPiece.style.left = "";
   selectedPiece.style.top = "";
 
-  renderBoard(); // Можно будет обновить доску (если нужно)
+  renderBoard(); // Обновляем доску после перемещения фигуры
 
   selectedPiece = null;
   selectedRow = null;
