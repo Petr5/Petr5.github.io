@@ -120,6 +120,107 @@ function renderBoard() {
   });
 }
 
+
+
+function isValidMove(
+  piece: string,
+  fromRow: number,
+  fromCol: number,
+  toRow: number,
+  toCol: number,
+  color: "white" | "black"
+): boolean {
+  const deltaRow = toRow - fromRow;
+  const deltaCol = toCol - fromCol;
+
+  const absRow = Math.abs(deltaRow);
+  const absCol = Math.abs(deltaCol);
+
+  const targetCell = initialBoard[toRow][toCol];
+
+  // Нельзя бить свою фигуру
+  if (targetCell.color === color) return false;
+
+  switch (piece) {
+    case "pawn":
+      const direction = color === "white" ? -1 : 1;
+      const startRow = color === "white" ? 6 : 1;
+
+      // Движение вперёд на 1
+      if (deltaCol === 0 && deltaRow === direction && !targetCell.piece) return true;
+
+      // Первый ход на 2
+      if (
+        deltaCol === 0 &&
+        fromRow === startRow &&
+        deltaRow === direction * 2 &&
+        !initialBoard[fromRow + direction][fromCol].piece &&
+        !targetCell.piece
+      ) {
+        return true;
+      }
+
+      // Атака по диагонали
+      if (
+        absCol === 1 &&
+        deltaRow === direction &&
+        targetCell.piece &&
+        targetCell.color !== color
+      ) {
+        return true;
+      }
+
+      return false;
+
+    case "rook":
+      if (fromRow !== toRow && fromCol !== toCol) return false;
+      return isPathClear(fromRow, fromCol, toRow, toCol);
+
+    case "bishop":
+      if (absRow !== absCol) return false;
+      return isPathClear(fromRow, fromCol, toRow, toCol);
+
+    case "queen":
+      if (fromRow === toRow || fromCol === toCol || absRow === absCol) {
+        return isPathClear(fromRow, fromCol, toRow, toCol);
+      }
+      return false;
+
+    case "knight":
+      return (
+        (absRow === 2 && absCol === 1) || (absRow === 1 && absCol === 2)
+      );
+
+    case "king":
+      return absRow <= 1 && absCol <= 1;
+
+    default:
+      return false;
+  }
+}
+
+// Проверка, что путь между from и to свободен (для ладьи, ферзя, слона)
+function isPathClear(
+  fromRow: number,
+  fromCol: number,
+  toRow: number,
+  toCol: number
+): boolean {
+  const rowStep = Math.sign(toRow - fromRow);
+  const colStep = Math.sign(toCol - fromCol);
+  let currentRow = fromRow + rowStep;
+  let currentCol = fromCol + colStep;
+
+  while (currentRow !== toRow || currentCol !== toCol) {
+    if (initialBoard[currentRow][currentCol].piece) return false;
+    currentRow += rowStep;
+    currentCol += colStep;
+  }
+
+  return true;
+}
+
+
 function onMouseDown(event: MouseEvent) {
   const target = event.target as HTMLElement;
   const cell = target.closest("[data-row][data-col]") as HTMLElement;
@@ -171,6 +272,17 @@ function onMouseUp(event: MouseEvent) {
 
   const newRow = Number(cell.dataset.row);
   const newCol = Number(cell.dataset.col);
+  const from = initialBoard[selectedRow][selectedCol];
+  const to = initialBoard[newRow][newCol];
+
+  if (!isValidMove(from.piece!, selectedRow, selectedCol, newRow, newCol, from.color!)) {
+    console.log("Invalid move");
+    renderBoard(); // вернём на место
+    selectedPiece = null;
+    selectedRow = null;
+    selectedCol = null;
+    return;
+  }
 
   console.log(`Moving piece from [${selectedRow}, ${selectedCol}] to [${newRow}, ${newCol}]`);
 
