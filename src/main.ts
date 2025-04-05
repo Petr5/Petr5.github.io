@@ -14,6 +14,8 @@ let selectedRow: number | null = null;
 let selectedCol: number | null = null;
 let offsetX = 0;
 let offsetY = 0;
+let currentTurn: "white" | "black" = "white";
+
 // Определяем цвета фигур
 const pieceColors = {
   black: "#DAA520",
@@ -228,9 +230,14 @@ function onMouseDown(event: MouseEvent) {
 
   const row = Number(cell.dataset.row);
   const col = Number(cell.dataset.col);
-  const { piece } = initialBoard[row][col];
+  const { piece, color } = initialBoard[row][col];
   if (!piece) return;
 
+  // 🔒 Блокируем, если не твой ход
+  if (color !== currentTurn) {
+    console.log(`It's ${currentTurn}'s turn!`);
+    return;
+  }
   console.log(`Piece selected: ${piece} at [${row}, ${col}]`);
 
   selectedPiece = target;
@@ -291,6 +298,8 @@ function onMouseUp(event: MouseEvent) {
 
   console.log("Updated board state:", initialBoard);
 
+  currentTurn = currentTurn === "white" ? "black" : "white";
+  console.log(`Now it's ${currentTurn}'s turn.`);
   // Возвращаем фигуру на её новое место
   selectedPiece.style.position = "static";
   selectedPiece.style.left = "";
