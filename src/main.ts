@@ -16,6 +16,7 @@ let offsetX = 0;
 let offsetY = 0;
 let currentTurn: "white" | "black" = "white";
 
+
 // Определяем цвета фигур
 const pieceColors = {
   black: "#DAA520",
@@ -66,11 +67,7 @@ function initBoard() {
                 data-row="${rowIndex}" data-col="${colIndex}">
                 ${
                   piece
-                    ? `<span class="text-xl cursor-pointer select-none piece"
-                        style="color: ${piece && color ? pieceColors[color] : "#444"}"
-                        data-piece="${piece}">
-                        ${figures[piece as keyof typeof figures]}
-                      </span>`
+                    ? renderCell(piece, color)
                     : ""
                 }
               </div>`
@@ -85,6 +82,19 @@ function initBoard() {
     (cell as HTMLElement).addEventListener("mousedown", onMouseDown);
   });
 }
+
+function renderCell(piece: string | null, color: "white" | "black" | null) {
+  if (!piece || !color) return "";
+
+  const imgSrc = `/img/${piece}-${color}.png`; // путь к изображению
+  return `<img
+    src="${imgSrc}"
+    alt="${color} ${piece}"
+    class="w-8 h-8 object-contain cursor-pointer select-none piece"
+    data-piece="${piece}"
+  />`;
+}
+
 
 // Функция для рендеринга доски при перемещении фигур
 function renderBoard() {
@@ -102,11 +112,7 @@ function renderBoard() {
                 data-row="${rowIndex}" data-col="${colIndex}">
                 ${
                   piece
-                    ? `<span class="text-xl cursor-pointer select-none piece"
-                        style="color: ${piece && color ? pieceColors[color] : "#444"}"
-                        data-piece="${piece}">
-                        ${figures[piece as keyof typeof figures]}
-                      </span>`
+                    ? renderCell(piece, color)
                     : ""
                 }
               </div>`
