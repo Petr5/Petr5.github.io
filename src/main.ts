@@ -368,3 +368,4 @@ function onMouseUp(event: MouseEvent) {
   selectedRow = null;
   selectedCol = null;
 }
+
