@@ -9,6 +9,17 @@ const figures = {
   king: "♔",
 };
 
+// Добавляем интерфейс для координат клетки
+interface CellPosition {
+  x: number;
+  y: number;
+}
+
+// Кэш координат центров клеток
+const cellCenters: CellPosition[][] = Array(8).fill(null).map(() => 
+  Array(8).fill(null).map(() => ({ x: 0, y: 0 }))
+);
+
 let selectedPiece: HTMLElement | null = null;
 let selectedRow: number | null = null;
 let selectedCol: number | null = null;
@@ -46,10 +57,38 @@ const initialBoard: { piece: string | null, color: 'black' | 'white' | null }[][
 const app = document.querySelector<HTMLDivElement>("#app");
 
 if (app) {
-  app.classList.add("flex", "justify-center", "items-center", "h-screen", "bg-gray-200");
+  app.classList.add(
+    "flex",
+    "justify-center",
+    "items-center",
+    "h-screen",
+    "bg-gray-200",
+    "overflow-hidden",
+    "fixed",
+    "w-full"
+  );
   initBoard(); // Инициализация доски при загрузке
 } else {
   console.error("Элемент #app не найден!");
+}
+
+function calculateCellCenters() {
+  const board = document.querySelector('.grid') as HTMLElement;
+  if (!board) return;
+
+  const cells = Array.from(board.querySelectorAll('[data-row][data-col]')) as HTMLElement[];
+
+  cells.forEach((cell) => {
+    const row = Number(cell.dataset.row);
+    const col = Number(cell.dataset.col);
+    const rect = cell.getBoundingClientRect();
+    const boardRect = board.getBoundingClientRect();
+
+    cellCenters[row][col] = {
+      x: rect.left - boardRect.left + rect.width / 2,
+      y: rect.top - boardRect.top + rect.height / 2
+    };
+  });
 }
 
 // Функция для начальной инициализации доски и размещения фигур
@@ -57,7 +96,7 @@ function initBoard() {
   if (!app) return;
 
   app.innerHTML = `
-    <div class="grid grid-cols-8 border-4 border-gray-800">
+    <div class="grid grid-cols-8 border-4 border-gray-800 relative bg-white" style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);">
       ${initialBoard
         .flatMap((row, rowIndex) =>
           row.map(
@@ -77,10 +116,12 @@ function initBoard() {
     </div>
   `;
 
-  // Добавляем обработчик события для mousedown
   document.querySelectorAll("[data-row][data-col]").forEach((cell) => {
     (cell as HTMLElement).addEventListener("mousedown", onMouseDown);
   });
+
+  // Рассчитываем координаты центров клеток после создания доски
+  calculateCellCenters();
 }
 
 function renderCell(piece: string | null, color: "white" | "black" | null) {
@@ -229,8 +270,20 @@ function isPathClear(
 }
 
 
+function movePieceToPosition(event: MouseEvent) {
+  if (!selectedPiece) return;
+
+  // Перемещаем фигуру точно за курсором
+  selectedPiece.style.position = 'fixed';
+  selectedPiece.style.left = `${event.clientX - 20}px`; // 20 это половина размера фигуры (40/2)
+  selectedPiece.style.top = `${event.clientY - 20}px`;
+}
+
 function onMouseDown(event: MouseEvent) {
   const target = event.target as HTMLElement;
+  
+  if (!target.classList.contains('piece')) return;
+  
   const cell = target.closest("[data-row][data-col]") as HTMLElement;
   if (!cell) return;
 
@@ -239,38 +292,34 @@ function onMouseDown(event: MouseEvent) {
   const { piece, color } = initialBoard[row][col];
   if (!piece) return;
 
-  // 🔒 Блокируем, если не твой ход
   if (color !== currentTurn) {
     console.log(`It's ${currentTurn}'s turn!`);
     return;
   }
+
+  event.preventDefault();
   console.log(`Piece selected: ${piece} at [${row}, ${col}]`);
 
   selectedPiece = target;
   selectedRow = row;
   selectedCol = col;
 
-  // Вычисляем смещение от верхнего левого угла клетки
-  const rect = cell.getBoundingClientRect();
-  offsetX = event.clientX - rect.left;
-  offsetY = event.clientY - rect.top;
-
-  // Устанавливаем фигуру в позицию absolute
-  selectedPiece.style.position = "absolute";
-  selectedPiece.style.zIndex = "1000";
-  selectedPiece.style.left = `${event.clientX - offsetX}px`;
-  selectedPiece.style.top = `${event.clientY - offsetY}px`;
+  // Устанавливаем стили для перетаскивания
+  selectedPiece.style.position = 'fixed';
+  selectedPiece.style.zIndex = '1000';
+  selectedPiece.style.pointerEvents = 'none';
+  selectedPiece.style.width = '40px';
+  selectedPiece.style.height = '40px';
+  
+  // Сразу устанавливаем позицию фигуры под курсором
+  movePieceToPosition(event);
 
   document.addEventListener("mousemove", onMouseMove);
   document.addEventListener("mouseup", onMouseUp);
 }
 
 function onMouseMove(event: MouseEvent) {
-  if (!selectedPiece) return;
-
-  // Перемещаем фигуру в новое место, с учётом смещения
-  selectedPiece.style.left = `${event.clientX - offsetX}px`;
-  selectedPiece.style.top = `${event.clientY - offsetY}px`;
+  movePieceToPosition(event);
 }
 
 function onMouseUp(event: MouseEvent) {
@@ -281,7 +330,13 @@ function onMouseUp(event: MouseEvent) {
 
   const target = document.elementFromPoint(event.clientX, event.clientY) as HTMLElement;
   const cell = target.closest("[data-row][data-col]") as HTMLElement;
-  if (!cell) return;
+  if (!cell) {
+    renderBoard();
+    selectedPiece = null;
+    selectedRow = null;
+    selectedCol = null;
+    return;
+  }
 
   const newRow = Number(cell.dataset.row);
   const newCol = Number(cell.dataset.col);
@@ -290,7 +345,7 @@ function onMouseUp(event: MouseEvent) {
 
   if (!isValidMove(from.piece!, selectedRow, selectedCol, newRow, newCol, from.color!)) {
     console.log("Invalid move");
-    renderBoard(); // вернём на место
+    renderBoard();
     selectedPiece = null;
     selectedRow = null;
     selectedCol = null;
@@ -306,12 +361,8 @@ function onMouseUp(event: MouseEvent) {
 
   currentTurn = currentTurn === "white" ? "black" : "white";
   console.log(`Now it's ${currentTurn}'s turn.`);
-  // Возвращаем фигуру на её новое место
-  selectedPiece.style.position = "static";
-  selectedPiece.style.left = "";
-  selectedPiece.style.top = "";
 
-  renderBoard(); // Обновляем доску после перемещения фигуры
+  renderBoard();
 
   selectedPiece = null;
   selectedRow = null;
