@@ -62,12 +62,11 @@ if (app) {
     "justify-center",
     "items-center",
     "h-screen",
+    "w-screen",
     "bg-gray-200",
-    "overflow-hidden",
-    "fixed",
-    "w-full"
+    "overflow-hidden"
   );
-  initBoard(); // Инициализация доски при загрузке
+  initBoard();
 } else {
   console.error("Элемент #app не найден!");
 }
@@ -96,12 +95,12 @@ function initBoard() {
   if (!app) return;
 
   app.innerHTML = `
-    <div class="grid grid-cols-8 border-4 border-gray-800 relative bg-white" style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);">
+    <div class="grid grid-cols-8 border-4 border-gray-800 bg-white min-w-[360px] min-h-[360px]">
       ${initialBoard
         .flatMap((row, rowIndex) =>
           row.map(
             ({ piece, color }, colIndex) => `
-              <div class="relative flex items-center justify-center w-10 h-10
+              <div class="relative flex items-center justify-center w-[45px] h-[45px]
                 ${(rowIndex + colIndex) % 2 === 0 ? "bg-white" : "bg-black"}"
                 data-row="${rowIndex}" data-col="${colIndex}">
                 ${
@@ -127,11 +126,11 @@ function initBoard() {
 function renderCell(piece: string | null, color: "white" | "black" | null) {
   if (!piece || !color) return "";
 
-  const imgSrc = `/img/${piece}-${color}.png`; // путь к изображению
+  const imgSrc = `/img/${piece}-${color}.png`;
   return `<img
     src="${imgSrc}"
     alt="${color} ${piece}"
-    class="w-8 h-8 object-contain cursor-pointer select-none piece"
+    class="w-[36px] h-[36px] object-contain cursor-pointer select-none piece"
     data-piece="${piece}"
   />`;
 }
@@ -143,12 +142,12 @@ function renderBoard() {
 
   // Восстановление состояния доски с актуальными фигурами
   app.innerHTML = `
-    <div class="grid grid-cols-8 border-4 border-gray-800">
+    <div class="grid grid-cols-8 border-4 border-gray-800 bg-white min-w-[360px] min-h-[360px]">
       ${initialBoard
         .flatMap((row, rowIndex) =>
           row.map(
             ({ piece, color }, colIndex) => `
-              <div class="relative flex items-center justify-center w-10 h-10
+              <div class="relative flex items-center justify-center w-[45px] h-[45px]
                 ${(rowIndex + colIndex) % 2 === 0 ? "bg-white" : "bg-black"}"
                 data-row="${rowIndex}" data-col="${colIndex}">
                 ${
@@ -275,8 +274,8 @@ function movePieceToPosition(event: MouseEvent) {
 
   // Перемещаем фигуру точно за курсором
   selectedPiece.style.position = 'fixed';
-  selectedPiece.style.left = `${event.clientX - 20}px`; // 20 это половина размера фигуры (40/2)
-  selectedPiece.style.top = `${event.clientY - 20}px`;
+  selectedPiece.style.left = `${event.clientX - 18}px`; // 18 это половина размера фигуры (36/2)
+  selectedPiece.style.top = `${event.clientY - 18}px`;
 }
 
 function onMouseDown(event: MouseEvent) {
@@ -308,8 +307,8 @@ function onMouseDown(event: MouseEvent) {
   selectedPiece.style.position = 'fixed';
   selectedPiece.style.zIndex = '1000';
   selectedPiece.style.pointerEvents = 'none';
-  selectedPiece.style.width = '40px';
-  selectedPiece.style.height = '40px';
+  selectedPiece.style.width = '36px';
+  selectedPiece.style.height = '36px';
   
   // Сразу устанавливаем позицию фигуры под курсором
   movePieceToPosition(event);
