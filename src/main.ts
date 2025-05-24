@@ -279,8 +279,8 @@ function movePieceToPosition(event: MouseEvent) {
 }
 
 function showPossibleMoves(row: number, col: number, piece: string, color: "white" | "black") {
-  // Удаляем предыдущие точки, если они есть
-  document.querySelectorAll('.possible-move').forEach(dot => dot.remove());
+  // Удаляем предыдущие точки и круги, если они есть
+  document.querySelectorAll('.possible-move, .possible-attack').forEach(el => el.remove());
 
   // Проверяем каждую клетку на доске
   for (let i = 0; i < 8; i++) {
@@ -291,20 +291,25 @@ function showPossibleMoves(row: number, col: number, piece: string, color: "whit
       // Проверяем, является ли ход допустимым
       if (isValidMove(piece, row, col, i, j, color)) {
         const targetCell = initialBoard[i][j];
-        // Не показываем точку, если в клетке есть фигура
-        if (targetCell.piece) continue;
-
-        // Находим клетку на доске
         const cell = document.querySelector(`[data-row="${i}"][data-col="${j}"]`);
+        
         if (cell) {
-          // Создаем и добавляем точку
-          const dot = document.createElement('div');
-          dot.className = 'possible-move absolute w-3 h-3 rounded-full bg-gray-500 opacity-50';
-          // Центрируем точку в клетке
-          dot.style.top = '50%';
-          dot.style.left = '50%';
-          dot.style.transform = 'translate(-50%, -50%)';
-          cell.appendChild(dot);
+          if (targetCell.piece && targetCell.color !== color) {
+            // Если в клетке есть вражеская фигура - рисуем круг вокруг нее
+            const circle = document.createElement('div');
+            circle.className = 'possible-attack absolute w-[45px] h-[45px] rounded-full border-2 border-gray-500 opacity-50';
+            circle.style.top = '0';
+            circle.style.left = '0';
+            cell.appendChild(circle);
+          } else if (!targetCell.piece) {
+            // Если клетка пустая - рисуем точку
+            const dot = document.createElement('div');
+            dot.className = 'possible-move absolute w-3 h-3 rounded-full bg-gray-500 opacity-50';
+            dot.style.top = '50%';
+            dot.style.left = '50%';
+            dot.style.transform = 'translate(-50%, -50%)';
+            cell.appendChild(dot);
+          }
         }
       }
     }
@@ -312,7 +317,7 @@ function showPossibleMoves(row: number, col: number, piece: string, color: "whit
 }
 
 function clearPossibleMoves() {
-  document.querySelectorAll('.possible-move').forEach(dot => dot.remove());
+  document.querySelectorAll('.possible-move, .possible-attack').forEach(el => el.remove());
 }
 
 function onMouseDown(event: MouseEvent) {
