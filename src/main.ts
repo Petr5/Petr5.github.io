@@ -278,6 +278,43 @@ function movePieceToPosition(event: MouseEvent) {
   selectedPiece.style.top = `${event.clientY - 18}px`;
 }
 
+function showPossibleMoves(row: number, col: number, piece: string, color: "white" | "black") {
+  // Удаляем предыдущие точки, если они есть
+  document.querySelectorAll('.possible-move').forEach(dot => dot.remove());
+
+  // Проверяем каждую клетку на доске
+  for (let i = 0; i < 8; i++) {
+    for (let j = 0; j < 8; j++) {
+      // Пропускаем текущую позицию фигуры
+      if (i === row && j === col) continue;
+
+      // Проверяем, является ли ход допустимым
+      if (isValidMove(piece, row, col, i, j, color)) {
+        const targetCell = initialBoard[i][j];
+        // Не показываем точку, если в клетке есть фигура
+        if (targetCell.piece) continue;
+
+        // Находим клетку на доске
+        const cell = document.querySelector(`[data-row="${i}"][data-col="${j}"]`);
+        if (cell) {
+          // Создаем и добавляем точку
+          const dot = document.createElement('div');
+          dot.className = 'possible-move absolute w-3 h-3 rounded-full bg-gray-500 opacity-50';
+          // Центрируем точку в клетке
+          dot.style.top = '50%';
+          dot.style.left = '50%';
+          dot.style.transform = 'translate(-50%, -50%)';
+          cell.appendChild(dot);
+        }
+      }
+    }
+  }
+}
+
+function clearPossibleMoves() {
+  document.querySelectorAll('.possible-move').forEach(dot => dot.remove());
+}
+
 function onMouseDown(event: MouseEvent) {
   const target = event.target as HTMLElement;
   
@@ -298,6 +335,9 @@ function onMouseDown(event: MouseEvent) {
 
   event.preventDefault();
   console.log(`Piece selected: ${piece} at [${row}, ${col}]`);
+
+  // Показываем возможные ходы
+  showPossibleMoves(row, col, piece, color);
 
   selectedPiece = target;
   selectedRow = row;
@@ -324,6 +364,9 @@ function onMouseMove(event: MouseEvent) {
 function onMouseUp(event: MouseEvent) {
   document.removeEventListener("mousemove", onMouseMove);
   document.removeEventListener("mouseup", onMouseUp);
+
+  // Убираем точки возможных ходов
+  clearPossibleMoves();
 
   if (!selectedPiece || selectedRow === null || selectedCol === null) return;
 
