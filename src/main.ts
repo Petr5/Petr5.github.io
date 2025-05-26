@@ -170,7 +170,143 @@ function renderBoard() {
 
 
 
+// Добавляем интерфейс для атакующей фигуры
+interface AttackingPiece {
+  piece: string;
+  color: "white" | "black";
+  row: number;
+  col: number;
+}
+
+// Функция для получения позиции короля
+function getKingPosition(color: "white" | "black"): { row: number; col: number } | null {
+  for (let i = 0; i < 8; i++) {
+    for (let j = 0; j < 8; j++) {
+      if (initialBoard[i][j].piece === "king" && initialBoard[i][j].color === color) {
+        return { row: i, col: j };
+      }
+    }
+  }
+  return null;
+}
+
+// Функция для проверки, находится ли клетка под атакой
+function isSquareUnderAttack(row: number, col: number, defendingColor: "white" | "black"): boolean {
+  const attackingColor = defendingColor === "white" ? "black" : "white";
+  
+  for (let i = 0; i < 8; i++) {
+    for (let j = 0; j < 8; j++) {
+      const attackingPiece = initialBoard[i][j];
+      if (attackingPiece.piece && attackingPiece.color === attackingColor) {
+        if (isValidMove(attackingPiece.piece, i, j, row, col, attackingColor)) {
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
+// Функция для получения всех атакующих фигур, создающих шах
+function getCheckingPieces(kingColor: "white" | "black"): AttackingPiece[] {
+  const kingPos = getKingPosition(kingColor);
+  if (!kingPos) return [];
+
+  const attackingPieces: AttackingPiece[] = [];
+  const oppositeColor = kingColor === "white" ? "black" : "white";
+
+  for (let i = 0; i < 8; i++) {
+    for (let j = 0; j < 8; j++) {
+      const piece = initialBoard[i][j];
+      if (piece.piece && piece.color === oppositeColor) {
+        if (isValidMove(piece.piece, i, j, kingPos.row, kingPos.col, oppositeColor)) {
+          attackingPieces.push({
+            piece: piece.piece,
+            color: piece.color,
+            row: i,
+            col: j
+          });
+        }
+      }
+    }
+  }
+  return attackingPieces;
+}
+
+// Функция для проверки, может ли фигура блокировать линию атаки
+function canBlockCheck(
+  attackingPiece: AttackingPiece,
+  kingPos: { row: number; col: number },
+  defendingColor: "white" | "black"
+): boolean {
+  // Получаем все клетки между атакующей фигурой и королем
+  const deltaRow = Math.sign(kingPos.row - attackingPiece.row);
+  const deltaCol = Math.sign(kingPos.col - attackingPiece.col);
+  let row = attackingPiece.row + deltaRow;
+  let col = attackingPiece.col + deltaCol;
+
+  while (row !== kingPos.row || col !== kingPos.col) {
+    // Проверяем, может ли какая-либо фигура защищающейся стороны достичь этой клетки
+    for (let i = 0; i < 8; i++) {
+      for (let j = 0; j < 8; j++) {
+        const piece = initialBoard[i][j];
+        if (piece.piece && piece.color === defendingColor && piece.piece !== "king") {
+          if (isValidMove(piece.piece, i, j, row, col, defendingColor)) {
+            return true;
+          }
+        }
+      }
+    }
+    row += deltaRow;
+    col += deltaCol;
+  }
+  return false;
+}
+
+// Функция для проверки возможности хода с учетом шаха
+function isMoveLegal(fromRow: number, fromCol: number, toRow: number, toCol: number, movingColor: "white" | "black"): boolean {
+  // Сохраняем текущее состояние
+  const originalPiece = initialBoard[toRow][toCol];
+  const movingPiece = initialBoard[fromRow][fromCol];
+
+  // Временно делаем ход
+  initialBoard[toRow][toCol] = initialBoard[fromRow][fromCol];
+  initialBoard[fromRow][fromCol] = { piece: null, color: null };
+
+  // Проверяем, не находится ли король под шахом после хода
+  const kingPos = getKingPosition(movingColor);
+  let isLegal = true;
+
+  if (kingPos) {
+    isLegal = !isSquareUnderAttack(kingPos.row, kingPos.col, movingColor);
+  }
+
+  // Возвращаем доску в исходное состояние
+  initialBoard[fromRow][fromCol] = movingPiece;
+  initialBoard[toRow][toCol] = originalPiece;
+
+  return isLegal;
+}
+
+// Обновляем функцию isValidMove для учета шаха
 function isValidMove(
+  piece: string,
+  fromRow: number,
+  fromCol: number,
+  toRow: number,
+  toCol: number,
+  color: "white" | "black"
+): boolean {
+  // Сначала проверяем базовую валидность хода
+  const basicValid = isBasicValidMove(piece, fromRow, fromCol, toRow, toCol, color);
+  if (!basicValid) return false;
+
+  // Затем проверяем легальность хода с учетом шаха
+  return isMoveLegal(fromRow, fromCol, toRow, toCol, color);
+}
+
+// Переименовываем оригинальную функцию isValidMove в isBasicValidMove
+function isBasicValidMove(
   piece: string,
   fromRow: number,
   fromCol: number,
@@ -268,7 +404,6 @@ function isPathClear(
   return true;
 }
 
-
 function movePieceToPosition(event: MouseEvent) {
   if (!selectedPiece) return;
 
@@ -336,6 +471,30 @@ function onMouseDown(event: MouseEvent) {
   if (color !== currentTurn) {
     console.log(`It's ${currentTurn}'s turn!`);
     return;
+  }
+
+  // Проверяем наличие шаха
+  const checkingPieces = getCheckingPieces(color);
+  if (checkingPieces.length > 0) {
+    // При двойном шахе можно двигать только королем
+    if (checkingPieces.length > 1 && piece !== "king") {
+      console.log("Double check! Only king can move!");
+      return;
+    }
+    // При одиночном шахе проверяем возможность защиты
+    if (checkingPieces.length === 1 && piece !== "king") {
+      const kingPos = getKingPosition(color);
+      if (!kingPos) return;
+
+      // Проверяем, может ли фигура съесть атакующую или блокировать линию атаки
+      const canBlock = canBlockCheck(checkingPieces[0], kingPos, color);
+      const canCapture = isValidMove(piece, row, col, checkingPieces[0].row, checkingPieces[0].col, color);
+
+      if (!canBlock && !canCapture) {
+        console.log("This piece cannot defend against check!");
+        return;
+      }
+    }
   }
 
   event.preventDefault();
