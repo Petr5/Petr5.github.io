@@ -719,7 +719,7 @@ const App: React.FC = () => {
           <div 
             className={`absolute ${
               possibleMove.type === 'attack' 
-                ? 'w-[63px] h-[63px] rounded-full border-2 border-gray-500 opacity-50' 
+                ? 'w-[63px] h-[63px] rounded-full border-3 border-gray-500 opacity-50' 
                 : 'w-4 h-4 rounded-full bg-gray-500 opacity-50'
             }`}
             style={{
