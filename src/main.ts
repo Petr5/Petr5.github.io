@@ -7,6 +7,25 @@ interface CellPosition {
   y: number;
 }
 
+// Добавляем интерфейс для touch событий
+interface TouchHandlers {
+  onTouchStart: (e: TouchEvent) => void;
+  onTouchMove: (e: TouchEvent) => void;
+  onTouchEnd: (e: TouchEvent) => void;
+}
+
+// Утилита для определения типа устройства
+const isMobileDevice = () => {
+  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+};
+
+// Добавляем интерфейс для фигуры с отслеживанием первого хода
+interface ChessPiece {
+  piece: string | null;
+  color: 'black' | 'white' | null;
+  hasMoved?: boolean; // Для отслеживания первого хода короля и ладьи
+}
+
 // Кэш координат центров клеток
 const cellCenters: CellPosition[][] = Array(8).fill(null).map(() => 
   Array(8).fill(null).map(() => ({ x: 0, y: 0 }))
@@ -17,27 +36,37 @@ let selectedRow: number | null = null;
 let selectedCol: number | null = null;
 let currentTurn: "white" | "black" = "white";
 
+// Добавляем флаг для отслеживания текущего типа взаимодействия
+let isTouchInteraction = false;
 
-// Определяем цвета фигур
-
-// Структура доски изменена для хранения цвета фигуры
-const initialBoard: { piece: string | null, color: 'black' | 'white' | null }[][] = [
+// Обновляем тип доски
+const initialBoard: ChessPiece[][] = [
   [
-    { piece: "rook", color: 'black' }, { piece: "knight", color: 'black' }, { piece: "bishop", color: 'black' },
-    { piece: "queen", color: 'black' }, { piece: "king", color: 'black' }, { piece: "bishop", color: 'black' },
-    { piece: "knight", color: 'black' }, { piece: "rook", color: 'black' }
-  ], // Чёрные фигуры
-  Array(8).fill({ piece: "pawn", color: 'black' }), // Чёрные пешки
-  Array(8).fill({ piece: null, color: null }), // Пустые клетки
+    { piece: "rook", color: 'black', hasMoved: false }, 
+    { piece: "knight", color: 'black' }, 
+    { piece: "bishop", color: 'black' },
+    { piece: "queen", color: 'black' }, 
+    { piece: "king", color: 'black', hasMoved: false }, 
+    { piece: "bishop", color: 'black' },
+    { piece: "knight", color: 'black' }, 
+    { piece: "rook", color: 'black', hasMoved: false }
+  ],
+  Array(8).fill({ piece: "pawn", color: 'black' }),
   Array(8).fill({ piece: null, color: null }),
   Array(8).fill({ piece: null, color: null }),
   Array(8).fill({ piece: null, color: null }),
-  Array(8).fill({ piece: "pawn", color: 'white' }), // Белые пешки
+  Array(8).fill({ piece: null, color: null }),
+  Array(8).fill({ piece: "pawn", color: 'white' }),
   [
-    { piece: "rook", color: 'white' }, { piece: "knight", color: 'white' }, { piece: "bishop", color: 'white' },
-    { piece: "queen", color: 'white' }, { piece: "king", color: 'white' }, { piece: "bishop", color: 'white' },
-    { piece: "knight", color: 'white' }, { piece: "rook", color: 'white' }
-  ], // Белые фигуры
+    { piece: "rook", color: 'white', hasMoved: false }, 
+    { piece: "knight", color: 'white' }, 
+    { piece: "bishop", color: 'white' },
+    { piece: "queen", color: 'white' }, 
+    { piece: "king", color: 'white', hasMoved: false }, 
+    { piece: "bishop", color: 'white' },
+    { piece: "knight", color: 'white' }, 
+    { piece: "rook", color: 'white', hasMoved: false }
+  ]
 ];
 
 const app = document.querySelector<HTMLDivElement>("#app");
@@ -76,24 +105,37 @@ function calculateCellCenters() {
   });
 }
 
-// Функция для начальной инициализации доски и размещения фигур
+function getPointerPosition(event: MouseEvent | TouchEvent): { clientX: number; clientY: number } {
+  if (event instanceof TouchEvent) {
+    const touch = event.touches[0] || event.changedTouches[0];
+    return {
+      clientX: touch.clientX,
+      clientY: touch.clientY
+    };
+  }
+  return {
+    clientX: event.clientX,
+    clientY: event.clientY
+  };
+}
+
 function initBoard() {
   if (!app) return;
 
+  // Добавляем класс для отключения масштабирования на мобильных
+  app.classList.add('touch-none');
+
   app.innerHTML = `
-    <div class="grid grid-cols-8 border-4 border-gray-800 bg-white min-w-[504px] min-h-[504px]">
+    <div class="grid grid-cols-8 border-4 border-gray-800 bg-white min-w-[504px] min-h-[504px] touch-none">
       ${initialBoard
         .flatMap((row, rowIndex) =>
           row.map(
             ({ piece, color }, colIndex) => `
               <div class="relative flex items-center justify-center w-[63px] h-[63px]
-                ${(rowIndex + colIndex) % 2 === 0 ? "bg-white" : "bg-black"}"
+                ${(rowIndex + colIndex) % 2 === 0 ? "bg-white" : "bg-black"}
+                touch-none"
                 data-row="${rowIndex}" data-col="${colIndex}">
-                ${
-                  piece
-                    ? renderCell(piece, color)
-                    : ""
-                }
+                ${piece ? renderCell(piece, color) : ""}
               </div>`
           )
         )
@@ -101,12 +143,42 @@ function initBoard() {
     </div>
   `;
 
-  document.querySelectorAll("[data-row][data-col]").forEach((cell) => {
-    (cell as HTMLElement).addEventListener("mousedown", onMouseDown);
-  });
+  // Добавляем обработчики событий для всей доски
+  const board = app.querySelector('.grid') as HTMLElement;
+  if (board) {
+    // Предотвращаем прокрутку на мобильных устройствах
+    board.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
+    
+    // Отключаем контекстное меню на мобильных
+    board.addEventListener('contextmenu', (e) => e.preventDefault());
+    
+    // Устанавливаем CSS переменную для viewport height
+    setViewportHeight();
+    window.addEventListener('resize', setViewportHeight);
+  }
 
-  // Рассчитываем координаты центров клеток после создания доски
+  bindBoardEvents();
   calculateCellCenters();
+}
+
+// Устанавливаем CSS переменную для корректной высоты на мобильных
+function setViewportHeight() {
+  document.documentElement.style.setProperty('--vh', `${window.innerHeight * 0.01}px`);
+}
+
+function bindBoardEvents() {
+  document.querySelectorAll("[data-row][data-col]").forEach((cell) => {
+    const piece = cell.querySelector(".piece") as HTMLElement;
+    if (piece) {
+      if (isMobileDevice()) {
+        // Для мобильных устройств
+        piece.addEventListener("touchstart", onPointerDown, { passive: false });
+      } else {
+        // Для десктопов
+        piece.addEventListener("mousedown", onPointerDown);
+      }
+    }
+  });
 }
 
 function renderCell(piece: string | null, color: "white" | "black" | null) {
@@ -147,10 +219,31 @@ function renderBoard() {
         .join("")}
     </div>
   `;
+    
+  // Повторно вешаем события после рендера
+  document.querySelectorAll("[data-row][data-col]").forEach((cell) => {
+    const element = cell as HTMLElement;
+    element.addEventListener("mousedown", onPointerDown);
+    element.addEventListener("touchstart", onPointerDown, { passive: false });
+  });
+
+  // Обновляем центры клеток
+  calculateCellCenters();
 
   // Добавляем обработчик события для mousedown
   document.querySelectorAll("[data-row][data-col]").forEach((cell) => {
-    (cell as HTMLElement).addEventListener("mousedown", onMouseDown);
+    (cell as HTMLElement).addEventListener("mousedown", onPointerDown);
+  });
+}
+
+
+function bindPointerEvents() {
+  document.querySelectorAll("[data-row][data-col]").forEach((cell) => {
+    const piece = cell.querySelector(".piece");
+    if (piece) {
+      piece.addEventListener("mousedown", (e: Event) => onPointerDown(e as MouseEvent));
+      piece.addEventListener("touchstart", (e: Event) => onPointerDown(e as TouchEvent), { passive: false });
+    }
   });
 }
 
@@ -362,6 +455,12 @@ function isBasicValidMove(
       );
 
     case "king":
+      // Проверка на рокировку
+      if (absRow === 0 && absCol === 2 && !initialBoard[fromRow][fromCol].hasMoved) {
+        const isKingSide = toCol > fromCol;
+        const rookCol = isKingSide ? 7 : 0;
+        return canCastle(fromRow, fromCol, rookCol, color);
+      }
       return absRow <= 1 && absCol <= 1;
 
     default:
@@ -390,16 +489,8 @@ function isPathClear(
   return true;
 }
 
-function movePieceToPosition(event: MouseEvent) {
-  if (!selectedPiece) return;
-
-  // Перемещаем фигуру точно за курсором
-  selectedPiece.style.position = 'fixed';
-  selectedPiece.style.left = `${event.clientX - 25}px`; // 25 это половина размера фигуры (50/2)
-  selectedPiece.style.top = `${event.clientY - 25}px`;
-}
-
 function showPossibleMoves(row: number, col: number, piece: string, color: "white" | "black") {
+  console.log("showPossibleMoves started");
   // Удаляем предыдущие точки и круги, если они есть
   document.querySelectorAll('.possible-move, .possible-attack').forEach(el => el.remove());
 
@@ -411,11 +502,15 @@ function showPossibleMoves(row: number, col: number, piece: string, color: "whit
 
       // Проверяем, является ли ход допустимым
       if (isValidMove(piece, row, col, i, j, color)) {
+        console.log("isValidMove true");
         const targetCell = initialBoard[i][j];
+        console.log("targetCell", targetCell, "i", i, "j", j);
         const cell = document.querySelector(`[data-row="${i}"][data-col="${j}"]`);
         
         if (cell) {
+          console.log("cell found");
           if (targetCell.piece && targetCell.color !== color) {
+            console.log("targetCell.piece && targetCell.color !== color");
             // Если в клетке есть вражеская фигура - рисуем круг вокруг нее
             const circle = document.createElement('div');
             circle.className = 'possible-attack absolute w-[63px] h-[63px] rounded-full border-2 border-gray-500 opacity-50';
@@ -423,12 +518,14 @@ function showPossibleMoves(row: number, col: number, piece: string, color: "whit
             circle.style.left = '0';
             cell.appendChild(circle);
           } else if (!targetCell.piece) {
+            console.log("!targetCell.piece");
             // Если клетка пустая - рисуем точку
             const dot = document.createElement('div');
             dot.className = 'possible-move absolute w-4 h-4 rounded-full bg-gray-500 opacity-50';
             dot.style.top = '50%';
             dot.style.left = '50%';
             dot.style.transform = 'translate(-50%, -50%)';
+            console.log("dot", dot);
             cell.appendChild(dot);
           }
         }
@@ -441,8 +538,19 @@ function clearPossibleMoves() {
   document.querySelectorAll('.possible-move, .possible-attack').forEach(el => el.remove());
 }
 
-function onMouseDown(event: MouseEvent) {
-  const target = event.target as HTMLElement;
+function onPointerDown(event: MouseEvent | TouchEvent) {
+  console.log("onPointerDown started");
+  
+  // Определяем тип взаимодействия
+  isTouchInteraction = event instanceof TouchEvent;
+  console.log("isTouchInteraction is ", isTouchInteraction);
+  if (isTouchInteraction) {
+    console.log("isTouchInteraction is true")
+    event.preventDefault();
+  }
+
+  const pos = getPointerPosition(event);
+  const target = document.elementFromPoint(pos.clientX, pos.clientY) as HTMLElement;
   
   if (!target.classList.contains('piece')) return;
   
@@ -462,17 +570,14 @@ function onMouseDown(event: MouseEvent) {
   // Проверяем наличие шаха
   const checkingPieces = getCheckingPieces(color);
   if (checkingPieces.length > 0) {
-    // При двойном шахе можно двигать только королем
     if (checkingPieces.length > 1 && piece !== "king") {
       console.log("Double check! Only king can move!");
       return;
     }
-    // При одиночном шахе проверяем возможность защиты
     if (checkingPieces.length === 1 && piece !== "king") {
       const kingPos = getKingPosition(color);
       if (!kingPos) return;
 
-      // Проверяем, может ли фигура съесть атакующую или блокировать линию атаки
       const canBlock = canBlockCheck(checkingPieces[0], kingPos, color);
       const canCapture = isValidMove(piece, row, col, checkingPieces[0].row, checkingPieces[0].col, color);
 
@@ -483,47 +588,59 @@ function onMouseDown(event: MouseEvent) {
     }
   }
 
-  event.preventDefault();
   console.log(`Piece selected: ${piece} at [${row}, ${col}]`);
 
-  // Показываем возможные ходы
+  clearPossibleMoves();
   showPossibleMoves(row, col, piece, color);
 
   selectedPiece = target;
   selectedRow = row;
   selectedCol = col;
 
-  // Устанавливаем стили для перетаскивания
   selectedPiece.style.position = 'fixed';
   selectedPiece.style.zIndex = '1000';
   selectedPiece.style.pointerEvents = 'none';
   selectedPiece.style.width = '50px';
   selectedPiece.style.height = '50px';
   
-  // Сразу устанавливаем позицию фигуры под курсором
   movePieceToPosition(event);
 
-  document.addEventListener("mousemove", onMouseMove);
-  document.addEventListener("mouseup", onMouseUp);
+  if (isTouchInteraction) {
+    console.log("touch event");
+    document.addEventListener("touchmove", onPointerMove, { passive: false });
+    document.addEventListener("touchend", onPointerUp);
+  } else {
+    console.log("mouse event");
+    document.addEventListener("mousemove", onPointerMove);
+    document.addEventListener("mouseup", onPointerUp);
+  }
 }
 
-function onMouseMove(event: MouseEvent) {
+function onPointerMove(event: MouseEvent | TouchEvent) {
+  event.preventDefault();
   movePieceToPosition(event);
 }
 
-function onMouseUp(event: MouseEvent) {
-  document.removeEventListener("mousemove", onMouseMove);
-  document.removeEventListener("mouseup", onMouseUp);
+function onPointerUp(event: MouseEvent | TouchEvent) {
+  if (isTouchInteraction) {
+    document.removeEventListener("touchmove", onPointerMove);
+    document.removeEventListener("touchend", onPointerUp);
+  } else {
+    document.removeEventListener("mousemove", onPointerMove);
+    document.removeEventListener("mouseup", onPointerUp);
+  }
 
-  // Убираем точки возможных ходов
   clearPossibleMoves();
 
   if (!selectedPiece || selectedRow === null || selectedCol === null) return;
 
-  const target = document.elementFromPoint(event.clientX, event.clientY) as HTMLElement;
-  const cell = target.closest("[data-row][data-col]") as HTMLElement;
+  const pos = getPointerPosition(event);
+  const target = document.elementFromPoint(pos.clientX, pos.clientY) as HTMLElement;
+  const cell = target?.closest("[data-row][data-col]") as HTMLElement;
+  
   if (!cell) {
     renderBoard();
+    bindPointerEvents();
     selectedPiece = null;
     selectedRow = null;
     selectedCol = null;
@@ -537,26 +654,93 @@ function onMouseUp(event: MouseEvent) {
   if (!isValidMove(from.piece!, selectedRow, selectedCol, newRow, newCol, from.color!)) {
     console.log("Invalid move");
     renderBoard();
+    bindPointerEvents();
     selectedPiece = null;
     selectedRow = null;
     selectedCol = null;
     return;
   }
 
-  console.log(`Moving piece from [${selectedRow}, ${selectedCol}] to [${newRow}, ${newCol}]`);
+  // Проверяем, является ли ход рокировкой
+  if (from.piece === "king" && Math.abs(newCol - selectedCol) === 2) {
+    const isKingSide = newCol > selectedCol;
+    const rookFromCol = isKingSide ? 7 : 0;
+    const rookToCol = isKingSide ? newCol - 1 : newCol + 1;
 
+    // Перемещаем ладью
+    initialBoard[newRow][rookToCol] = initialBoard[newRow][rookFromCol];
+    initialBoard[newRow][rookFromCol] = { piece: null, color: null };
+    initialBoard[newRow][rookToCol].hasMoved = true;
+  }
+
+  // Выполняем ход
   initialBoard[newRow][newCol] = initialBoard[selectedRow][selectedCol];
   initialBoard[selectedRow][selectedCol] = { piece: null, color: null };
 
-  console.log("Updated board state:", initialBoard);
+  // Отмечаем, что фигура сделала ход
+  if (from.piece === "king" || from.piece === "rook") {
+    initialBoard[newRow][newCol].hasMoved = true;
+  }
 
   currentTurn = currentTurn === "white" ? "black" : "white";
   console.log(`Now it's ${currentTurn}'s turn.`);
 
   renderBoard();
+  bindPointerEvents();
 
   selectedPiece = null;
   selectedRow = null;
   selectedCol = null;
+  isTouchInteraction = false;
+}
+
+function movePieceToPosition(event: MouseEvent | TouchEvent) {
+  if (!selectedPiece) return;
+
+  const pos = getPointerPosition(event);
+  
+  // Перемещаем фигуру за курсором/пальцем с учетом центра фигуры
+  selectedPiece.style.left = `${pos.clientX}px`;
+  selectedPiece.style.top = `${pos.clientY}px`;
+}
+
+// Функция для проверки возможности рокировки
+function canCastle(
+  kingRow: number,
+  kingCol: number,
+  rookCol: number,
+  color: "white" | "black"
+): boolean {
+  const king = initialBoard[kingRow][kingCol];
+  const rook = initialBoard[kingRow][rookCol];
+
+  // Проверяем, что король и ладья не двигались
+  if (!king || !rook || king.hasMoved || rook.hasMoved) {
+    return false;
+  }
+
+  // Проверяем, что путь между королем и ладьей свободен
+  const start = Math.min(kingCol, rookCol) + 1;
+  const end = Math.max(kingCol, rookCol);
+  for (let col = start; col < end; col++) {
+    if (initialBoard[kingRow][col].piece) {
+      return false;
+    }
+  }
+
+  // Проверяем, не находится ли король под шахом
+  if (isSquareUnderAttack(kingRow, kingCol, color)) {
+    return false;
+  }
+
+  // Проверяем, не проходит ли король через атакованные поля
+  const direction = rookCol < kingCol ? -1 : 1;
+  for (let col = kingCol + direction; col !== rookCol; col += direction) {
+    if (isSquareUnderAttack(kingRow, col, color)) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
