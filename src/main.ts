@@ -1,13 +1,5 @@
 import "./index.css";
 
-const figures = {
-  pawn: "♙",
-  rook: "♖",
-  knight: "♘",
-  bishop: "♗",
-  queen: "♕",
-  king: "♔",
-};
 
 // Добавляем интерфейс для координат клетки
 interface CellPosition {
@@ -23,16 +15,10 @@ const cellCenters: CellPosition[][] = Array(8).fill(null).map(() =>
 let selectedPiece: HTMLElement | null = null;
 let selectedRow: number | null = null;
 let selectedCol: number | null = null;
-let offsetX = 0;
-let offsetY = 0;
 let currentTurn: "white" | "black" = "white";
 
 
 // Определяем цвета фигур
-const pieceColors = {
-  black: "#DAA520",
-  white: "#444",
-};
 
 // Структура доски изменена для хранения цвета фигуры
 const initialBoard: { piece: string | null, color: 'black' | 'white' | null }[][] = [
@@ -547,7 +533,6 @@ function onMouseUp(event: MouseEvent) {
   const newRow = Number(cell.dataset.row);
   const newCol = Number(cell.dataset.col);
   const from = initialBoard[selectedRow][selectedCol];
-  const to = initialBoard[newRow][newCol];
 
   if (!isValidMove(from.piece!, selectedRow, selectedCol, newRow, newCol, from.color!)) {
     console.log("Invalid move");
