@@ -418,14 +418,14 @@ function showPossibleMoves(row: number, col: number, piece: string, color: "whit
           if (targetCell.piece && targetCell.color !== color) {
             // Если в клетке есть вражеская фигура - рисуем круг вокруг нее
             const circle = document.createElement('div');
-            circle.className = 'possible-attack absolute w-[45px] h-[45px] rounded-full border-2 border-gray-500 opacity-50';
+            circle.className = 'possible-attack absolute w-[63px] h-[63px] rounded-full border-2 border-gray-500 opacity-50';
             circle.style.top = '0';
             circle.style.left = '0';
             cell.appendChild(circle);
           } else if (!targetCell.piece) {
             // Если клетка пустая - рисуем точку
             const dot = document.createElement('div');
-            dot.className = 'possible-move absolute w-3 h-3 rounded-full bg-gray-500 opacity-50';
+            dot.className = 'possible-move absolute w-4 h-4 rounded-full bg-gray-500 opacity-50';
             dot.style.top = '50%';
             dot.style.left = '50%';
             dot.style.transform = 'translate(-50%, -50%)';
