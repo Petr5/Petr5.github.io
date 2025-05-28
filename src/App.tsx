@@ -61,6 +61,28 @@ function isPathClear(
   return true;
 }
 
+// Добавляем функцию для проверки, не открывает ли ход шах своему королю
+function moveExposesKingToCheck(
+  fromRow: number,
+  fromCol: number,
+  toRow: number,
+  toCol: number,
+  color: "white" | "black",
+  board: ChessPiece[][]
+): boolean {
+  // Создаем временную копию доски с выполненным ходом
+  const tempBoard = board.map(row => [...row]);
+  tempBoard[toRow][toCol] = tempBoard[fromRow][fromCol];
+  tempBoard[fromRow][fromCol] = { piece: null, color: null };
+
+  // Находим позицию своего короля
+  const kingPos = getKingPosition(color, tempBoard);
+  if (!kingPos) return true; // Если король не найден, считаем ход невалидным
+
+  // Проверяем, не находится ли король под шахом после хода
+  return isSquareUnderAttack(kingPos.row, kingPos.col, color, tempBoard);
+}
+
 // Обновляем функцию isValidMove
 function isValidMove(
   piece: string,
@@ -164,17 +186,9 @@ function isValidMove(
 
   if (!basicMoveValid) return false;
 
-  // Дополнительная проверка для короля - не ходит ли он под шах
-  if (piece === 'king') {
-    // Создаем временную копию доски с выполненным ходом
-    const tempBoard = board.map(row => [...row]);
-    tempBoard[toRow][toCol] = tempBoard[fromRow][fromCol];
-    tempBoard[fromRow][fromCol] = { piece: null, color: null };
-
-    // Проверяем, не будет ли король под шахом после хода
-    if (isSquareUnderAttack(toRow, toCol, color, tempBoard)) {
-      return false;
-    }
+  // Проверяем, не открывает ли ход шах своему королю
+  if (moveExposesKingToCheck(fromRow, fromCol, toRow, toCol, color, board)) {
+    return false;
   }
 
   return true;
