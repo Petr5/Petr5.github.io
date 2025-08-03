@@ -492,6 +492,15 @@ const App: React.FC = () => {
     element.style.width = '50px';
     element.style.height = '50px';
     
+    // Адаптируем размер для разных экранов
+    if (window.innerWidth >= 1024) { // lg
+      element.style.width = '80px';
+      element.style.height = '80px';
+    } else if (window.innerWidth >= 768) { // md
+      element.style.width = '67px';
+      element.style.height = '67px';
+    }
+    
     // Позиционируем фигуру, учитывая точку захвата
     element.style.left = `${e.clientX - offsetX}px`;
     element.style.top = `${e.clientY - offsetY}px`;
@@ -609,6 +618,15 @@ const App: React.FC = () => {
     element.style.width = '50px';
     element.style.height = '50px';
     
+    // Адаптируем размер для разных экранов
+    if (window.innerWidth >= 1024) { // lg
+      element.style.width = '80px';
+      element.style.height = '80px';
+    } else if (window.innerWidth >= 768) { // md
+      element.style.width = '67px';
+      element.style.height = '67px';
+    }
+    
     // Позиционируем фигуру, учитывая точку захвата
     element.style.left = `${touch.clientX - offsetX}px`;
     element.style.top = `${touch.clientY - offsetY}px`;
@@ -709,7 +727,7 @@ const App: React.FC = () => {
     return (
       <div
         key={`${row}-${col}`}
-        className={`relative flex items-center justify-center w-[63px] h-[63px] ${
+        className={`relative flex items-center justify-center w-[63px] h-[63px] md:w-[84px] md:h-[84px] lg:w-[100px] lg:h-[100px] ${
           isDark ? 'bg-black' : 'bg-white'
         } touch-none`}
         data-row={row}
@@ -719,8 +737,8 @@ const App: React.FC = () => {
           <div 
             className={`absolute ${
               possibleMove.type === 'attack' 
-                ? 'w-[63px] h-[63px] rounded-full border-3 border-gray-500 opacity-50' 
-                : 'w-4 h-4 rounded-full bg-gray-500 opacity-50'
+                ? 'w-[63px] h-[63px] md:w-[84px] md:h-[84px] lg:w-[100px] lg:h-[100px] rounded-full border-3 border-gray-500 opacity-50' 
+                : 'w-4 h-4 md:w-5 md:h-5 lg:w-6 lg:h-6 rounded-full bg-gray-500 opacity-50'
             }`}
             style={{
               top: possibleMove.type === 'attack' ? '0' : '50%',
@@ -733,7 +751,7 @@ const App: React.FC = () => {
           <img
             src={`/img/${piece.piece}-${piece.color}.png`}
             alt={`${piece.color} ${piece.piece}`}
-            className="w-[50px] h-[50px] object-contain cursor-pointer select-none piece"
+            className="w-[50px] h-[50px] md:w-[67px] md:h-[67px] lg:w-[80px] lg:h-[80px] object-contain cursor-pointer select-none piece"
             onMouseDown={(e) => handleMouseDown(e, row, col)}
             onTouchStart={(e) => handleTouchStart(e, row, col)}
             onTouchMove={handleTouchMove}
@@ -762,7 +780,7 @@ const App: React.FC = () => {
           </div>
         </div>
       )}
-      <div className="grid grid-cols-8 border-4 border-gray-800 bg-white min-w-[504px] min-h-[504px] touch-none">
+      <div className="grid grid-cols-8 border-4 border-gray-800 bg-white min-w-[504px] min-h-[504px] md:min-w-[672px] md:min-h-[672px] lg:min-w-[800px] lg:min-h-[800px] touch-none">
         {board.map((row, rowIndex) =>
           row.map((piece, colIndex) => renderCell(piece, rowIndex, colIndex))
         )}
