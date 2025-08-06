@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { useState, useEffect, useCallback } from 'react';
 import './index.css';
+import { useTelegram } from './telegram';
 
 interface ChessPiece {
   piece: string | null;
@@ -342,6 +343,44 @@ const App: React.FC = () => {
   const [possibleMoves, setPossibleMoves] = useState<{row: number; col: number; type: 'move' | 'attack'}[]>([]);
   const [winner, setWinner] = useState<'white' | 'black' | null>(null);
 
+  // Инициализация Telegram API
+  const telegram = useTelegram();
+
+  // Настройка Telegram приложения
+  useEffect(() => {
+    if (telegram.isInitialized && telegram.isTelegramApp) {
+      // Устанавливаем цвета в соответствии с темой Telegram
+      telegram.setBackgroundColor(telegram.backgroundColor);
+      telegram.setTextColor(telegram.textColor);
+      
+      // Показываем главную кнопку для новой игры
+      telegram.showMainButton('Новая игра', () => {
+        window.location.reload();
+      });
+      
+      // Показываем кнопку "Назад"
+      telegram.showBackButton(() => {
+        telegram.close();
+      });
+      
+      console.log('Telegram Web App настроен');
+    }
+  }, [telegram]);
+
+  // Функция для обработки победы
+  const handleWin = useCallback((winner: 'white' | 'black') => {
+    setWinner(winner);
+    // Показываем уведомление в Telegram
+    if (telegram.isTelegramApp) {
+      telegram.showAlert(
+        `${winner === 'white' ? 'Белые' : 'Черные'} победили! Мат!`,
+        () => {
+          telegram.hideMainButton();
+        }
+      );
+    }
+  }, [telegram]);
+
   // Добавляем функцию проверки на мат
   const isCheckmate = useCallback((color: 'white' | 'black'): boolean => {
     const kingPos = getKingPosition(color, board);
@@ -560,7 +599,7 @@ const App: React.FC = () => {
           
           // Проверяем, не поставлен ли мат следующему игроку
           if (isCheckmate(nextTurn)) {
-            setWinner(currentTurn);
+            handleWin(currentTurn);
           }
         }
       }
@@ -699,7 +738,7 @@ const App: React.FC = () => {
           
           // Проверяем, не поставлен ли мат следующему игроку
           if (isCheckmate(nextTurn)) {
-            setWinner(currentTurn);
+            handleWin(currentTurn);
           }
         }
       }
