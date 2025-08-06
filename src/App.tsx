@@ -788,7 +788,7 @@ const App: React.FC = () => {
         )}
         {piece.piece && (
           <img
-            src={`/img/${piece.piece}-${piece.color}.png`}
+            src={`/Chess/img/${piece.piece}-${piece.color}.png`}
             alt={`${piece.color} ${piece.piece}`}
             className="w-[50px] h-[50px] md:w-[67px] md:h-[67px] lg:w-[80px] lg:h-[80px] object-contain cursor-pointer select-none piece"
             onMouseDown={(e) => handleMouseDown(e, row, col)}
