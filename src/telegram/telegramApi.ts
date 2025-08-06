@@ -111,7 +111,7 @@ export class TelegramApi {
    */
   public getTextColor(): string {
     try {
-      return WebApp.textColor;
+      return WebApp.themeParams?.text_color || '#000000';
     } catch (error) {
       console.error('Ошибка получения цвета текста:', error);
       return '#000000';
@@ -123,7 +123,7 @@ export class TelegramApi {
    */
   public setBackgroundColor(color: string): void {
     try {
-      WebApp.setBackgroundColor(color);
+      WebApp.setBackgroundColor(color as any);
     } catch (error) {
       console.error('Ошибка установки цвета фона:', error);
     }
@@ -132,9 +132,10 @@ export class TelegramApi {
   /**
    * Установить цвет текста
    */
-  public setTextColor(color: string): void {
+  public setTextColor(_color: string): void {
     try {
-      WebApp.setTextColor(color);
+      // setTextColor не существует в текущей версии SDK
+      console.warn('setTextColor не поддерживается в текущей версии SDK');
     } catch (error) {
       console.error('Ошибка установки цвета текста:', error);
     }
@@ -169,13 +170,14 @@ export class TelegramApi {
   /**
    * Показать всплывающее окно
    */
-  public showPopup(title: string, message: string, buttons?: Array<{
+  public showPopup(title: string, message: string, _buttons?: Array<{
     id?: string;
     type?: 'default' | 'ok' | 'close' | 'cancel' | 'destructive';
     text: string;
   }>): void {
     try {
-      WebApp.showPopup(title, message, buttons);
+      // showPopup с тремя параметрами не поддерживается
+      WebApp.showPopup({ title, message });
     } catch (error) {
       console.error('Ошибка показа всплывающего окна:', error);
     }
@@ -230,7 +232,7 @@ export class TelegramApi {
    */
   public isTelegramApp(): boolean {
     try {
-      return WebApp.isTelegramApp();
+      return WebApp.isVersionAtLeast('6.0');
     } catch (error) {
       console.error('Ошибка проверки Telegram App:', error);
       return false;
@@ -290,7 +292,7 @@ export class TelegramApi {
    */
   public setHeaderColor(color: string): void {
     try {
-      WebApp.setHeaderColor(color);
+      WebApp.setHeaderColor(color as any);
     } catch (error) {
       console.error('Ошибка установки цвета заголовка:', error);
     }
@@ -299,9 +301,10 @@ export class TelegramApi {
   /**
    * Установить цвет кнопки "Назад"
    */
-  public setBackButtonColor(color: string): void {
+  public setBackButtonColor(_color: string): void {
     try {
-      WebApp.setBackButtonColor(color);
+      // setBackButtonColor не существует в текущей версии SDK
+      console.warn('setBackButtonColor не поддерживается в текущей версии SDK');
     } catch (error) {
       console.error('Ошибка установки цвета кнопки "Назад":', error);
     }

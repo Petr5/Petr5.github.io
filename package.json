@@ -6,11 +6,14 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "predeploy": "npm run build",
+    "deploy": "gh-pages -d dist"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.4.21",
+    "gh-pages": "^6.3.0",
     "postcss": "^8.5.3",
     "tailwindcss": "^4.0.17",
     "typescript": "~5.7.2",
@@ -19,10 +22,10 @@
   "dependencies": {
     "@tailwindcss/postcss": "^4.0.17",
     "@tailwindcss/vite": "^4.0.17",
+    "@twa-dev/sdk": "^7.0.0",
     "@types/react": "^19.1.6",
     "@types/react-dom": "^19.1.5",
     "react": "^19.1.0",
-    "react-dom": "^19.1.0",
-    "@twa-dev/sdk": "^7.0.0"
+    "react-dom": "^19.1.0"
   }
 }
