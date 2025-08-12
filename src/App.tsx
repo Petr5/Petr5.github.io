@@ -342,6 +342,11 @@ const App: React.FC = () => {
   const [currentTurn, setCurrentTurn] = useState<'white' | 'black'>('white');
   const [possibleMoves, setPossibleMoves] = useState<{row: number; col: number; type: 'move' | 'attack'}[]>([]);
   const [winner, setWinner] = useState<'white' | 'black' | null>(null);
+  const [promotion, setPromotion] = useState<{
+    row: number;
+    col: number;
+    color: 'white' | 'black';
+  } | null>(null);
 
   // Инициализация Telegram API
   const telegram = useTelegram();
@@ -507,7 +512,25 @@ const App: React.FC = () => {
     setPossibleMoves([]);
   }, []);
 
+  const handlePromote = useCallback((newPiece: 'queen' | 'rook' | 'bishop' | 'knight') => {
+    if (!promotion) return;
+    const { row, col, color } = promotion;
+
+    const promotedBoard = board.map(r => [...r]);
+    promotedBoard[row][col] = { piece: newPiece, color };
+    setBoard(promotedBoard);
+
+    const nextTurn = color === 'white' ? 'black' : 'white';
+    setCurrentTurn(nextTurn);
+    if (isCheckmate(nextTurn)) {
+      handleWin(color);
+    }
+
+    setPromotion(null);
+  }, [promotion, board, isCheckmate, handleWin]);
+
   const handleMouseDown = useCallback((e: React.MouseEvent<HTMLImageElement>, row: number, col: number) => {
+    if (promotion) return; // Блокируем действия во время выбора превращения
     const piece = board[row][col];
     if (!piece.piece || piece.color !== currentTurn) return;
     
@@ -586,6 +609,18 @@ const App: React.FC = () => {
           newBoard[newRow][newCol] = board[selectedPiece.row][selectedPiece.col];
           newBoard[selectedPiece.row][selectedPiece.col] = { piece: null, color: null };
           
+          // Превращение пешки
+          const movedPiece = newBoard[newRow][newCol];
+          if (movedPiece.piece === 'pawn') {
+            const lastRank = movedPiece.color === 'white' ? 0 : 7;
+            if (newRow === lastRank) {
+              setBoard(newBoard);
+              setPromotion({ row: newRow, col: newCol, color: movedPiece.color! });
+              setSelectedPiece(null);
+              return;
+            }
+          }
+
           if (newBoard[newRow][newCol].piece === 'king' || 
               newBoard[newRow][newCol].piece === 'rook') {
             newBoard[newRow][newCol].hasMoved = true;
@@ -633,6 +668,7 @@ const App: React.FC = () => {
   }, [selectedPiece, handleMouseUp]);
 
   const handleTouchStart = useCallback((e: React.TouchEvent<HTMLImageElement>, row: number, col: number) => {
+    if (promotion) return; // Блокируем действия во время выбора превращения
     const piece = board[row][col];
     if (!piece.piece || piece.color !== currentTurn) return;
     
@@ -725,6 +761,18 @@ const App: React.FC = () => {
           newBoard[newRow][newCol] = board[selectedPiece.row][selectedPiece.col];
           newBoard[selectedPiece.row][selectedPiece.col] = { piece: null, color: null };
           
+          // Превращение пешки
+          const movedPiece = newBoard[newRow][newCol];
+          if (movedPiece.piece === 'pawn') {
+            const lastRank = movedPiece.color === 'white' ? 0 : 7;
+            if (newRow === lastRank) {
+              setBoard(newBoard);
+              setPromotion({ row: newRow, col: newCol, color: movedPiece.color! });
+              setSelectedPiece(null);
+              return;
+            }
+          }
+
           if (newBoard[newRow][newCol].piece === 'king' || 
               newBoard[newRow][newCol].piece === 'rook') {
             newBoard[newRow][newCol].hasMoved = true;
@@ -788,7 +836,7 @@ const App: React.FC = () => {
         )}
         {piece.piece && (
           <img
-            src={`/Chess/img/${piece.piece}-${piece.color}.png`}
+            src={`/img/${piece.piece}-${piece.color}.png`}
             alt={`${piece.color} ${piece.piece}`}
             className="w-[50px] h-[50px] md:w-[67px] md:h-[67px] lg:w-[80px] lg:h-[80px] object-contain cursor-pointer select-none piece"
             onMouseDown={(e) => handleMouseDown(e, row, col)}
@@ -819,9 +867,27 @@ const App: React.FC = () => {
           </div>
         </div>
       )}
-      <div className="grid grid-cols-8 border-4 border-gray-800 bg-white min-w-[504px] min-h-[504px] md:min-w-[672px] md:min-h-[672px] lg:min-w-[800px] lg:min-h-[800px] touch-none">
+      <div className="grid grid-cols-8 border-4 border-gray-800 bg-white min-w-[504px] min-h-[504px] md:min-w-[672px] md:min-h-[672px] lg:min-w-[800px] lg:min-h-[800px] touch-none relative">
         {board.map((row, rowIndex) =>
           row.map((piece, colIndex) => renderCell(piece, rowIndex, colIndex))
+        )}
+        {promotion && (
+          <div className="absolute inset-0 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg shadow-lg p-2 flex flex-col items-center gap-2">
+              <button className="p-1 hover:bg-gray-100 rounded" onClick={() => handlePromote('queen')}>
+                <img src={`/img/queen-${promotion.color}.png`} alt="" className="w-16 h-16 object-contain" />
+              </button>
+              <button className="p-1 hover:bg-gray-100 rounded" onClick={() => handlePromote('rook')}>
+                <img src={`/img/rook-${promotion.color}.png`} alt="" className="w-16 h-16 object-contain" />
+              </button>
+              <button className="p-1 hover:bg-gray-100 rounded" onClick={() => handlePromote('bishop')}>
+                <img src={`/img/bishop-${promotion.color}.png`} alt="" className="w-16 h-16 object-contain" />
+              </button>
+              <button className="p-1 hover:bg-gray-100 rounded" onClick={() => handlePromote('knight')}>
+                <img src={`/img/knight-${promotion.color}.png`} alt="" className="w-16 h-16 object-contain" />
+              </button>
+            </div>
+          </div>
         )}
       </div>
     </div>
