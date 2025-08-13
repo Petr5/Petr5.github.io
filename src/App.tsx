@@ -357,6 +357,8 @@ const App: React.FC = () => {
       // Устанавливаем цвета в соответствии с темой Telegram
       telegram.setBackgroundColor(telegram.backgroundColor);
       telegram.setTextColor(telegram.textColor);
+
+      telegram.expand();
       
       // Показываем главную кнопку для новой игры
       telegram.showMainButton('Новая игра', () => {
