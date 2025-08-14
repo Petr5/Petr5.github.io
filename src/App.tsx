@@ -1,7 +1,8 @@
 import * as React from 'react';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import './index.css';
 import { useTelegram } from './telegram';
+import { LobbyClient, MovePayload, PlayerColor } from './net';
 
 interface ChessPiece {
   piece: string | null;
@@ -348,6 +349,14 @@ const App: React.FC = () => {
     color: 'white' | 'black';
   } | null>(null);
 
+  // Сетевое взаимодействие
+  const [roomId, setRoomId] = useState<string>('');
+  const [selfColor, setSelfColor] = useState<PlayerColor>('white');
+  const lobbyRef = useRef<LobbyClient | null>(null);
+  const [inviteUrl, setInviteUrl] = useState<string>('');
+  const boardContainerRef = useRef<HTMLDivElement | null>(null);
+  const applyRemoteMoveRef = useRef<((payload: MovePayload) => void) | null>(null);
+
   // Инициализация Telegram API
   const telegram = useTelegram();
 
@@ -373,6 +382,54 @@ const App: React.FC = () => {
       console.log('Telegram Web App настроен');
     }
   }, [telegram]);
+
+  // Инициализация лобби/комнаты
+  useEffect(() => {
+    if (!telegram.isInitialized) return;
+
+    const urlRoom = new URLSearchParams(window.location.search).get('room') || undefined;
+    const startParam = telegram.startParam || urlRoom;
+    const createdRoomId = startParam && startParam.length > 0
+      ? startParam
+      : (typeof crypto !== 'undefined' ? crypto.randomUUID().slice(0, 8) : Math.random().toString(36).slice(2, 10));
+    setRoomId(createdRoomId);
+
+    const meId = String(telegram.user?.id ?? (typeof crypto !== 'undefined' ? crypto.randomUUID() : Math.random().toString(36).slice(2)));
+    const meName = telegram.user?.username || telegram.user?.first_name || 'Player';
+
+    // Если мы зашли по приглашению (есть start_param) — будем играть чёрными, иначе белыми
+    const color: PlayerColor = startParam ? 'black' : 'white';
+    setSelfColor(color);
+
+    // Создаём клиент лобби (пока транспорт локальный; заменим на WS позже)
+    if (lobbyRef.current) {
+      lobbyRef.current.dispose();
+    }
+    lobbyRef.current = new LobbyClient({
+      roomId: createdRoomId,
+      self: { userId: meId, displayName: meName },
+      selfColor: color,
+      events: {
+        onMove: (_opponent, payload) => {
+          // Применяем ход соперника через ref, чтобы не терять актуальное состояние
+          applyRemoteMoveRef.current && applyRemoteMoveRef.current(payload);
+        },
+      },
+    });
+
+    // Подготовим ссылку-приглашение в бота
+    const botUsername = (import.meta as any).env?.VITE_TG_BOT_USERNAME || '';
+    const deepLink = botUsername
+      ? `https://t.me/${botUsername}?startapp=${createdRoomId}`
+      : `${window.location.origin}?room=${createdRoomId}`;
+    setInviteUrl(deepLink);
+
+    return () => {
+      lobbyRef.current?.dispose();
+      lobbyRef.current = null;
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [telegram.isInitialized]);
 
   // Функция для обработки победы
   const handleWin = useCallback((winner: 'white' | 'black') => {
@@ -528,13 +585,22 @@ const App: React.FC = () => {
       handleWin(color);
     }
 
+    // Отправляем информацию о превращении, если ход был локальным
+    lobbyRef.current?.sendMove({
+      fromRow: row,
+      fromCol: col,
+      toRow: row,
+      toCol: col,
+      promotion: newPiece,
+    });
+
     setPromotion(null);
   }, [promotion, board, isCheckmate, handleWin]);
 
   const handleMouseDown = useCallback((e: React.MouseEvent<HTMLImageElement>, row: number, col: number) => {
     if (promotion) return; // Блокируем действия во время выбора превращения
     const piece = board[row][col];
-    if (!piece.piece || piece.color !== currentTurn) return;
+    if (!piece.piece || piece.color !== currentTurn || piece.color !== selfColor) return;
     
     const element = e.currentTarget;
     const rect = element.getBoundingClientRect();
@@ -568,7 +634,7 @@ const App: React.FC = () => {
     // Позиционируем фигуру, учитывая точку захвата
     element.style.left = `${e.clientX - offsetX}px`;
     element.style.top = `${e.clientY - offsetY}px`;
-  }, [board, currentTurn, showPossibleMoves]);
+  }, [board, currentTurn, selfColor, showPossibleMoves]);
 
   const handleMouseUp = useCallback((e: React.MouseEvent<HTMLImageElement>) => {
     if (!selectedPiece || !selectedPiece.element) return;
@@ -638,6 +704,14 @@ const App: React.FC = () => {
           if (isCheckmate(nextTurn)) {
             handleWin(currentTurn);
           }
+
+          // Отправляем ход сопернику
+          lobbyRef.current?.sendMove({
+            fromRow: selectedPiece.row,
+            fromCol: selectedPiece.col,
+            toRow: newRow,
+            toCol: newCol,
+          });
         }
       }
     }
@@ -672,7 +746,7 @@ const App: React.FC = () => {
   const handleTouchStart = useCallback((e: React.TouchEvent<HTMLImageElement>, row: number, col: number) => {
     if (promotion) return; // Блокируем действия во время выбора превращения
     const piece = board[row][col];
-    if (!piece.piece || piece.color !== currentTurn) return;
+    if (!piece.piece || piece.color !== currentTurn || piece.color !== selfColor) return;
     
     const touch = e.touches[0];
     const element = e.currentTarget;
@@ -707,7 +781,7 @@ const App: React.FC = () => {
     // Позиционируем фигуру, учитывая точку захвата
     element.style.left = `${touch.clientX - offsetX}px`;
     element.style.top = `${touch.clientY - offsetY}px`;
-  }, [board, currentTurn, showPossibleMoves]);
+  }, [board, currentTurn, selfColor, showPossibleMoves]);
 
   const handleTouchMove = useCallback((e: React.TouchEvent<HTMLImageElement>) => {
     e.preventDefault();
@@ -790,6 +864,14 @@ const App: React.FC = () => {
           if (isCheckmate(nextTurn)) {
             handleWin(currentTurn);
           }
+
+          // Отправляем ход сопернику
+          lobbyRef.current?.sendMove({
+            fromRow: selectedPiece.row,
+            fromCol: selectedPiece.col,
+            toRow: newRow,
+            toCol: newCol,
+          });
         }
       }
     }
@@ -797,7 +879,8 @@ const App: React.FC = () => {
     setSelectedPiece(null);
   }, [selectedPiece, board, currentTurn, isCheckmate, clearPossibleMoves]);
 
-  const handleCastling = (fromRow: number, fromCol: number, toRow: number, toCol: number) => {
+  // Рокировка (перестановка ладьи при ходе короля на 2 клетки)
+  function handleCastling(fromRow: number, fromCol: number, toRow: number, toCol: number) {
     const isKingSide = toCol > fromCol;
     const rookFromCol = isKingSide ? 7 : 0;
     const rookToCol = isKingSide ? toCol - 1 : toCol + 1;
@@ -807,7 +890,47 @@ const App: React.FC = () => {
     newBoard[fromRow][rookFromCol] = { piece: null, color: null };
     newBoard[toRow][rookToCol].hasMoved = true;
     setBoard(newBoard);
-  };
+  }
+
+  // Применение хода, полученного по сети
+  const applyRemoteMove = useCallback((payload: MovePayload) => {
+    const { fromRow, fromCol, toRow, toCol, promotion: promo } = payload;
+    const mover = board[fromRow][fromCol];
+    if (!mover.piece) return;
+    const color = mover.color as 'white' | 'black';
+    if (!isValidMove(mover.piece, fromRow, fromCol, toRow, toCol, color, board)) return;
+
+    // Рокировка
+    if (mover.piece === 'king' && Math.abs(toCol - fromCol) === 2) {
+      handleCastling(fromRow, fromCol, toRow, toCol);
+    }
+
+    const newBoard = [...board];
+    newBoard[toRow][toCol] = newBoard[fromRow][fromCol];
+    newBoard[fromRow][fromCol] = { piece: null, color: null };
+
+    // Превращение пешки (если передано в payload)
+    if (promo && newBoard[toRow][toCol].piece === 'pawn') {
+      newBoard[toRow][toCol] = { piece: promo, color };
+    }
+
+    if (newBoard[toRow][toCol].piece === 'king' || newBoard[toRow][toCol].piece === 'rook') {
+      newBoard[toRow][toCol].hasMoved = true;
+    }
+
+    setBoard(newBoard);
+
+    const nextTurn = currentTurn === 'white' ? 'black' : 'white';
+    setCurrentTurn(nextTurn);
+    if (isCheckmate(nextTurn)) {
+      handleWin(currentTurn);
+    }
+  }, [board, currentTurn, handleCastling, isCheckmate, handleWin]);
+
+  // Храним актуальный обработчик применения удалённого хода
+  useEffect(() => {
+    applyRemoteMoveRef.current = applyRemoteMove;
+  }, [applyRemoteMove]);
 
   const renderCell = (piece: ChessPiece, row: number, col: number) => {
     const isDark = (row + col) % 2 === 1;
@@ -853,6 +976,31 @@ const App: React.FC = () => {
 
   return (
     <div className="flex flex-col justify-center items-center min-h-screen w-screen bg-gray-200 overflow-hidden">
+      <div className="w-full max-w-[800px] p-3 text-center">
+        {roomId && (
+          <div className="mb-3 text-sm text-gray-700 break-words">
+            Комната: <span className="font-mono">{roomId}</span>
+            {inviteUrl && (
+              <div className="mt-2 flex items-center justify-center gap-2">
+                <button
+                  className="bg-blue-500 hover:bg-blue-600 text-white text-sm py-1 px-3 rounded"
+                  onClick={() => navigator.clipboard?.writeText(inviteUrl)}
+                >
+                  Скопировать приглашение
+                </button>
+                {telegram.isTelegramApp && (
+                  <button
+                    className="bg-gray-800 hover:bg-gray-900 text-white text-sm py-1 px-3 rounded"
+                    onClick={() => telegram.openTelegramLink(inviteUrl)}
+                  >
+                    Открыть в Telegram
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
       {winner && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white p-8 rounded-lg shadow-lg text-center">
@@ -869,9 +1017,13 @@ const App: React.FC = () => {
           </div>
         </div>
       )}
-      <div className="grid grid-cols-8 border-4 border-gray-800 bg-white w-[100vw] max-w-[504px] md:max-w-[672px] lg:max-w-[800px] aspect-square touch-none relative">
+      <div ref={boardContainerRef} className={`grid grid-cols-8 border-4 border-gray-800 bg-white w-[100vw] max-w-[504px] md:max-w-[672px] lg:max-w-[800px] aspect-square touch-none relative ${selfColor === 'black' ? 'rotate-180' : ''}`}>
         {board.map((row, rowIndex) =>
-          row.map((piece, colIndex) => renderCell(piece, rowIndex, colIndex))
+          row.map((piece, colIndex) => (
+            <div key={`wrap-${rowIndex}-${colIndex}`} className={selfColor === 'black' ? 'rotate-180' : ''}>
+              {renderCell(piece, rowIndex, colIndex)}
+            </div>
+          ))
         )}
         {promotion && (
           <div className="absolute inset-0 flex items-center justify-center z-50">

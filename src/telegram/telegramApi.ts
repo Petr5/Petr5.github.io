@@ -288,6 +288,30 @@ export class TelegramApi {
   }
 
   /**
+   * Получить start_param (приглашение/параметр запуска)
+   */
+  public getStartParam(): string | undefined {
+    try {
+      return WebApp.initDataUnsafe?.start_param;
+    } catch (error) {
+      console.error('Ошибка получения start_param:', error);
+      return undefined;
+    }
+  }
+
+  /**
+   * Открыть ссылку в Telegram
+   */
+  public openTelegramLink(url: string): void {
+    try {
+      // @ts-ignore - метод доступен в SDK
+      WebApp.openTelegramLink?.(url);
+    } catch (error) {
+      console.error('Ошибка открытия Telegram ссылки:', error);
+    }
+  }
+
+  /**
    * Установить заголовок
    */
   public setHeaderColor(color: string): void {

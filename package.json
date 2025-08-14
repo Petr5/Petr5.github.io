@@ -8,7 +8,8 @@
     "build": "set NODE_OPTIONS=--max-old-space-size=4096 && tsc && vite build",
     "preview": "vite preview",
     "predeploy": "npm run build",
-    "deploy": "gh-pages -d dist"
+    "deploy": "gh-pages -d dist",
+    "server": "node server/index.js"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.4",
@@ -25,6 +26,8 @@
     "@twa-dev/sdk": "^7.0.0",
     "@types/react": "^19.1.6",
     "@types/react-dom": "^19.1.5",
+    "cors": "^2.8.5",
+    "express": "^5.1.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
   }

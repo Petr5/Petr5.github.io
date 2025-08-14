@@ -11,6 +11,7 @@ export interface UseTelegramReturn {
   textColor: string;
   version: string;
   platform: string;
+  startParam?: string;
 
   // Методы
   init: () => void;
@@ -35,6 +36,7 @@ export interface UseTelegramReturn {
   onViewportChanged: (callback: () => void) => void;
   onMainButtonClicked: (callback: () => void) => void;
   onBackButtonClicked: (callback: () => void) => void;
+  openTelegramLink: (url: string) => void;
 }
 
 export const useTelegram = (): UseTelegramReturn => {
@@ -46,6 +48,7 @@ export const useTelegram = (): UseTelegramReturn => {
   const [version, setVersion] = useState('');
   const [platform, setPlatform] = useState('');
   const [isTelegramApp, setIsTelegramApp] = useState(false);
+  const [startParam, setStartParam] = useState<string | undefined>(undefined);
 
   const telegramApi = TelegramApi.getInstance();
 
@@ -76,6 +79,9 @@ export const useTelegram = (): UseTelegramReturn => {
       // Проверяем, запущено ли в Telegram
       setIsTelegramApp(telegramApi.isTelegramApp());
       
+      // Получаем start_param
+      setStartParam(telegramApi.getStartParam());
+
       // Устанавливаем обработчики событий
       telegramApi.onThemeChanged(() => {
         const newTheme = telegramApi.getThemeParams();
@@ -182,6 +188,10 @@ export const useTelegram = (): UseTelegramReturn => {
     telegramApi.onBackButtonClicked(callback);
   }, [telegramApi]);
 
+  const openTelegramLink = useCallback((url: string) => {
+    telegramApi.openTelegramLink(url);
+  }, [telegramApi]);
+
   return {
     // Состояние
     isInitialized,
@@ -192,6 +202,7 @@ export const useTelegram = (): UseTelegramReturn => {
     textColor,
     version,
     platform,
+    startParam,
 
     // Методы
     init,
@@ -212,5 +223,6 @@ export const useTelegram = (): UseTelegramReturn => {
     onViewportChanged,
     onMainButtonClicked,
     onBackButtonClicked,
+    openTelegramLink,
   };
 }; 
