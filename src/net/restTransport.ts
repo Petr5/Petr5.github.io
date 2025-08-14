@@ -11,7 +11,7 @@ export class RestTransport implements Transport {
   private polling = false;
 
   constructor(baseUrl: string) {
-    this.baseUrl = baseUrl.replace(/\/$/, '');
+    this.baseUrl = baseUrl.trim().replace(/\/$/, '');
   }
 
   connect(channelName: string): void {

@@ -30,7 +30,7 @@ export class LobbyClient {
     if (params.transport) {
       this.transport = params.transport;
     } else {
-      let apiBase = (import.meta as any).env?.VITE_API_BASE as string | undefined;
+      let apiBase = ((import.meta as any).env?.VITE_API_BASE as string | undefined)?.trim();
       if (!apiBase && typeof window !== 'undefined') {
         const host = window.location.hostname;
         if (host === 'localhost' || host === '127.0.0.1') {

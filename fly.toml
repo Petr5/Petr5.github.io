@@ -1,0 +1,26 @@
+app = "chess-events"
+primary_region = "ams"
+
+[build]
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ["app"]
+
+  [[http_service.http_checks]]
+    interval = "10s"
+    timeout = "2s"
+    method = "get"
+    path = "/health"
+
+
+[vm]
+  memory = "256mb"
+  cpu_kind = "shared"
+  cpus = 1
+
+

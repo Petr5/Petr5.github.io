@@ -118,7 +118,7 @@ app.get('/rooms/:roomId/events', (req, res) => {
   return res.json({ events: slice });
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`Chess events server listening on http://localhost:${PORT}`);
 });
 

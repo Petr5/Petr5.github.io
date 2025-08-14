@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "set NODE_OPTIONS=--max-old-space-size=4096 && tsc && vite build",
+    "build": "set VITE_API_BASE=https://chess-events.fly.dev && set NODE_OPTIONS=--max-old-space-size=4096 && tsc && vite build",
     "preview": "vite preview",
     "predeploy": "npm run build",
     "deploy": "gh-pages -d dist",

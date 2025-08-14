@@ -344,8 +344,10 @@ const App: React.FC = () => {
   const [possibleMoves, setPossibleMoves] = useState<{row: number; col: number; type: 'move' | 'attack'}[]>([]);
   const [winner, setWinner] = useState<'white' | 'black' | null>(null);
   const [promotion, setPromotion] = useState<{
-    row: number;
-    col: number;
+    fromRow: number;
+    fromCol: number;
+    toRow: number;
+    toCol: number;
     color: 'white' | 'black';
   } | null>(null);
 
@@ -573,10 +575,10 @@ const App: React.FC = () => {
 
   const handlePromote = useCallback((newPiece: 'queen' | 'rook' | 'bishop' | 'knight') => {
     if (!promotion) return;
-    const { row, col, color } = promotion;
+    const { fromRow, fromCol, toRow, toCol, color } = promotion;
 
     const promotedBoard = board.map(r => [...r]);
-    promotedBoard[row][col] = { piece: newPiece, color };
+    promotedBoard[toRow][toCol] = { piece: newPiece, color };
     setBoard(promotedBoard);
 
     const nextTurn = color === 'white' ? 'black' : 'white';
@@ -585,12 +587,12 @@ const App: React.FC = () => {
       handleWin(color);
     }
 
-    // Отправляем информацию о превращении, если ход был локальным
+    // Отправляем информацию о превращении с корректными координатами хода
     lobbyRef.current?.sendMove({
-      fromRow: row,
-      fromCol: col,
-      toRow: row,
-      toCol: col,
+      fromRow,
+      fromCol,
+      toRow,
+      toCol,
       promotion: newPiece,
     });
 
@@ -683,7 +685,7 @@ const App: React.FC = () => {
             const lastRank = movedPiece.color === 'white' ? 0 : 7;
             if (newRow === lastRank) {
               setBoard(newBoard);
-              setPromotion({ row: newRow, col: newCol, color: movedPiece.color! });
+              setPromotion({ fromRow: selectedPiece.row, fromCol: selectedPiece.col, toRow: newRow, toCol: newCol, color: movedPiece.color! });
               setSelectedPiece(null);
               return;
             }
@@ -843,7 +845,7 @@ const App: React.FC = () => {
             const lastRank = movedPiece.color === 'white' ? 0 : 7;
             if (newRow === lastRank) {
               setBoard(newBoard);
-              setPromotion({ row: newRow, col: newCol, color: movedPiece.color! });
+              setPromotion({ fromRow: selectedPiece.row, fromCol: selectedPiece.col, toRow: newRow, toCol: newCol, color: movedPiece.color! });
               setSelectedPiece(null);
               return;
             }
@@ -1017,15 +1019,16 @@ const App: React.FC = () => {
           </div>
         </div>
       )}
-      <div ref={boardContainerRef} className={`grid grid-cols-8 border-4 border-gray-800 bg-white w-[100vw] max-w-[504px] md:max-w-[672px] lg:max-w-[800px] aspect-square touch-none relative ${selfColor === 'black' ? 'rotate-180' : ''}`}>
-        {board.map((row, rowIndex) =>
-          row.map((piece, colIndex) => (
-            <div key={`wrap-${rowIndex}-${colIndex}`} className={selfColor === 'black' ? 'rotate-180' : ''}>
-              {renderCell(piece, rowIndex, colIndex)}
-            </div>
-          ))
-        )}
-        {promotion && (
+      <div ref={boardContainerRef} className={`relative w-[100vw] max-w-[504px] md:max-w-[672px] lg:max-w-[800px] aspect-square touch-none`}>
+        <div className={`grid grid-cols-8 border-4 border-gray-800 bg-white absolute inset-0 ${selfColor === 'black' ? 'rotate-180' : ''}`}>
+          {board.map((row, rowIndex) =>
+            row.map((piece, colIndex) => (
+              <div key={`wrap-${rowIndex}-${colIndex}`} className={selfColor === 'black' ? 'rotate-180' : ''}>
+                {renderCell(piece, rowIndex, colIndex)}
+              </div>
+            ))
+          )}
+          {promotion && (
           <div className="absolute inset-0 flex items-center justify-center z-50">
             <div className="bg-white rounded-lg shadow-lg p-2 flex flex-col items-center gap-2">
               <button className="p-1 hover:bg-gray-100 rounded" onClick={() => handlePromote('queen')}>
@@ -1042,7 +1045,33 @@ const App: React.FC = () => {
               </button>
             </div>
           </div>
-        )}
+          )}
+        </div>
+        {/* Координатные метки: только снизу (буквы) и слева (цифры), без поворота */}
+        {(() => {
+          const files = selfColor === 'white'
+            ? ['A','B','C','D','E','F','G','H']
+            : ['H','G','F','E','D','C','B','A'];
+          const ranks = selfColor === 'white'
+            ? ['8','7','6','5','4','3','2','1']
+            : ['1','2','3','4','5','6','7','8'];
+          return (
+            <>
+              {/* Нижние буквы */}
+              <div className="pointer-events-none absolute bottom-1 left-0 right-0 flex justify-between px-2 text-gray-700 text-xs md:text-sm font-semibold">
+                {files.map((f, i) => (
+                  <span key={`b-${i}`}>{f}</span>
+                ))}
+              </div>
+              {/* Левые цифры */}
+              <div className="pointer-events-none absolute left-1 top-0 bottom-0 flex flex-col justify-between py-2 text-gray-700 text-xs md:text-sm font-semibold">
+                {ranks.map((r, i) => (
+                  <span key={`l-${i}`}>{r}</span>
+                ))}
+              </div>
+            </>
+          );
+        })()}
       </div>
     </div>
   );
