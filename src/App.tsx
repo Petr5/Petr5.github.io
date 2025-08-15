@@ -1033,14 +1033,25 @@ const App: React.FC = () => {
         </div>
       )}
       <div ref={boardContainerRef} className={`relative w-[100vw] max-w-[504px] md:max-w-[672px] lg:max-w-[800px] aspect-square touch-none`}>
-        <div className={`grid grid-cols-8 border-4 border-gray-800 bg-white absolute inset-0 ${selfColor === 'black' ? 'rotate-180' : ''}`}>
-          {board.map((row, rowIndex) =>
-            row.map((piece, colIndex) => (
-              <div key={`wrap-${rowIndex}-${colIndex}`} className={selfColor === 'black' ? 'rotate-180' : ''}>
-                {renderCell(piece, rowIndex, colIndex)}
-              </div>
-            ))
-          )}
+        <div className={`grid grid-cols-8 border-4 border-gray-800 bg-white absolute inset-0 ${selfColor === 'black' ? '' : ''}`}>
+          {(() => {
+            // Определяем порядок строк и столбцов для отрисовки
+            // Если игрок белый, идем от 0 до 7
+            // Если игрок черный, идем от 7 до 0 (т.е. 7-i)
+            const rowsToRender = selfColor === 'white' ? Array.from({ length: 8 }, (_, i) => i) : Array.from({ length: 8 }, (_, i) => 7 - i);
+            const colsToRender = selfColor === 'white' ? Array.from({ length: 8 }, (_, i) => i) : Array.from({ length: 8 }, (_, i) => 7 - i);
+
+            return rowsToRender.map((rowIndex) => // rowIndex здесь - это реальный индекс из board (0-7), но порядок итерации задан rowsToRender
+              colsToRender.map((colIndex) => { // colIndex здесь - это реальный индекс из board (0-7), но порядок итерации задан colsToRender
+                const piece = board[rowIndex][colIndex]; // Получаем фигуру из фактического состояния доски
+                return (
+                  <div key={`wrap-${rowIndex}-${colIndex}`}> {/* Удален rotate-180 */}
+                    {renderCell(piece, rowIndex, colIndex)} {/* Передаем фактические координаты фигуры */}
+                  </div>
+                );
+              })
+            );
+          })()}
           {promotion && (
           <div className="absolute inset-0 flex items-center justify-center z-50">
             <div className="bg-white rounded-lg shadow-lg p-2 flex flex-col items-center gap-2">
