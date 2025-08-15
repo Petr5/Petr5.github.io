@@ -976,6 +976,19 @@ const App: React.FC = () => {
     );
   };
 
+  useEffect(() => {
+    // Скрипт для подсчёта времени загрузки всех ресурсов
+    window.addEventListener('load', () => {
+      const resources = window.performance.getEntriesByType('resource');
+      let totalTime = 0;
+      resources.forEach(res => {
+        totalTime += res.duration;
+        console.log(`${res.name}: ${res.duration.toFixed(2)} ms`);
+      });
+      console.log(`Общее время загрузки всех ресурсов: ${totalTime.toFixed(2)} ms`);
+    });
+  }, []);
+
   return (
     <div className="flex flex-col justify-center items-center min-h-screen w-screen bg-gray-200 overflow-hidden">
       <div className="w-full max-w-[800px] p-3 text-center">
