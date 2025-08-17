@@ -937,7 +937,14 @@ const App: React.FC = () => {
   const renderCell = (piece: ChessPiece, row: number, col: number) => {
     const isDark = (row + col) % 2 === 1;
     const possibleMove = possibleMoves.find(move => move.row === row && move.col === col);
-    
+    // Определяем буквенные и числовые обозначения
+    const files = selfColor === 'white'
+      ? ['A','B','C','D','E','F','G','H']
+      : ['H','G','F','E','D','C','B','A'];
+    const ranks = selfColor === 'white'
+      ? ['8','7','6','5','4','3','2','1']
+      : ['1','2','3','4','5','6','7','8'];
+
     return (
       <div
         key={`${row}-${col}`}
@@ -947,6 +954,20 @@ const App: React.FC = () => {
         data-row={row}
         data-col={col}
       >
+        {/* Цифровые метки (ряды) - в верхнем левом углу */}
+        {(selfColor === 'white' && col === 0) || (selfColor === 'black' && col === 7) ? (
+          <span className="absolute top-0 left-1 text-gray-700 text-xs md:text-sm font-semibold pointer-events-none">
+            {ranks[row]}
+          </span>
+        ) : null}
+          
+        {/* Буквенные метки (колонки) - в нижнем правом углу */}
+        {(selfColor === 'white' && row === 7) || (selfColor === 'black' && row === 0) ? (
+          <span className="absolute bottom-0 right-1 text-gray-700 text-xs md:text-sm font-semibold pointer-events-none">
+            {files[col]}
+          </span>
+        ) : null}
+
         {possibleMove && (
           <div 
             className={`absolute ${
@@ -1071,31 +1092,6 @@ const App: React.FC = () => {
           </div>
           )}
         </div>
-        {/* Координатные метки: только снизу (буквы) и слева (цифры), без поворота */}
-        {(() => {
-          const files = selfColor === 'white'
-            ? ['A','B','C','D','E','F','G','H']
-            : ['H','G','F','E','D','C','B','A'];
-          const ranks = selfColor === 'white'
-            ? ['8','7','6','5','4','3','2','1']
-            : ['1','2','3','4','5','6','7','8'];
-          return (
-            <>
-              {/* Нижние буквы */}
-              <div className="pointer-events-none absolute bottom-1 left-0 right-0 flex justify-between px-2 text-gray-700 text-xs md:text-sm font-semibold">
-                {files.map((f, i) => (
-                  <span key={`b-${i}`}>{f}</span>
-                ))}
-              </div>
-              {/* Левые цифры */}
-              <div className="pointer-events-none absolute left-1 top-0 bottom-0 flex flex-col justify-between py-2 text-gray-700 text-xs md:text-sm font-semibold">
-                {ranks.map((r, i) => (
-                  <span key={`l-${i}`}>{r}</span>
-                ))}
-              </div>
-            </>
-          );
-        })()}
       </div>
     </div>
   );
