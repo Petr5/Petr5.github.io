@@ -991,6 +991,7 @@ const App: React.FC = () => {
             onTouchStart={(e) => handleTouchStart(e, row, col)}
             onTouchMove={handleTouchMove}
             onTouchEnd={handleTouchEnd}
+            draggable="false"
           />
         )}
       </div>
