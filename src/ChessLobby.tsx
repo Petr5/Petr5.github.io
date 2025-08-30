@@ -330,8 +330,12 @@ function canBlockCheck(
     tempBoard
   );
 }
+interface ChessLobbyProps {
+  roomId: string;
+}
 
-const App: React.FC = () => {
+
+const ChessLobby: React.FC<ChessLobbyProps> = ({ roomId }) => {
   const [board, setBoard] = useState<ChessPiece[][]>(initialBoard);
   const [selectedPiece, setSelectedPiece] = useState<{
     row: number;
@@ -352,7 +356,7 @@ const App: React.FC = () => {
   } | null>(null);
 
   // Сетевое взаимодействие
-  const [roomId, setRoomId] = useState<string>('');
+  // const [roomId, setRoomId] = useState<string>('');
   const [selfColor, setSelfColor] = useState<PlayerColor>('white');
   const lobbyRef = useRef<LobbyClient | null>(null);
   const [inviteUrl, setInviteUrl] = useState<string>('');
@@ -387,20 +391,20 @@ const App: React.FC = () => {
 
   // Инициализация лобби/комнаты
   useEffect(() => {
-    if (!telegram.isInitialized) return;
+    if (!telegram.isInitialized || !roomId) return; 
 
-    const urlRoom = new URLSearchParams(window.location.search).get('room') || undefined;
-    const startParam = telegram.startParam || urlRoom;
-    const createdRoomId = startParam && startParam.length > 0
-      ? startParam
-      : (typeof crypto !== 'undefined' ? crypto.randomUUID().slice(0, 8) : Math.random().toString(36).slice(2, 10));
-    setRoomId(createdRoomId);
+    // const urlRoom = new URLSearchParams(window.location.search).get('room') || undefined;
+    // const startParam = telegram.startParam || urlRoom;
+    // const createdRoomId = startParam && startParam.length > 0
+    //   ? startParam
+    //   : (typeof crypto !== 'undefined' ? crypto.randomUUID().slice(0, 8) : Math.random().toString(36).slice(2, 10));
+    // setRoomId(createdRoomId);
 
     const meId = String(telegram.user?.id ?? (typeof crypto !== 'undefined' ? crypto.randomUUID() : Math.random().toString(36).slice(2)));
     const meName = telegram.user?.username || telegram.user?.first_name || 'Player';
 
     // Если мы зашли по приглашению (есть start_param) — будем играть чёрными, иначе белыми
-    const color: PlayerColor = startParam ? 'black' : 'white';
+    const color: PlayerColor = telegram.startParam === roomId ? 'black' : 'white';
     setSelfColor(color);
 
     // Создаём клиент лобби (пока транспорт локальный; заменим на WS позже)
@@ -408,7 +412,7 @@ const App: React.FC = () => {
       lobbyRef.current.dispose();
     }
     lobbyRef.current = new LobbyClient({
-      roomId: createdRoomId,
+      roomId: roomId,
       self: { userId: meId, displayName: meName },
       selfColor: color,
       events: {
@@ -422,8 +426,8 @@ const App: React.FC = () => {
     // Подготовим ссылку-приглашение в бота
     const botUsername = (import.meta as any).env?.VITE_TG_BOT_USERNAME || '';
     const deepLink = botUsername
-      ? `https://t.me/${botUsername}?startapp=${createdRoomId}`
-      : `${window.location.origin}?room=${createdRoomId}`;
+      ? `https://t.me/${botUsername}?startapp=${roomId}`
+      : `${window.location.origin}?room=${roomId}`;
     setInviteUrl(deepLink);
 
     return () => {
@@ -431,7 +435,7 @@ const App: React.FC = () => {
       lobbyRef.current = null;
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [telegram.isInitialized]);
+  }, [telegram.isInitialized, roomId, telegram.startParam]);
 
   // Функция для обработки победы
   const handleWin = useCallback((winner: 'white' | 'black') => {
@@ -1025,14 +1029,6 @@ const App: React.FC = () => {
                 >
                   Скопировать приглашение
                 </button>
-                {telegram.isTelegramApp && (
-                  <button
-                    className="bg-gray-800 hover:bg-gray-900 text-white text-sm py-1 px-3 rounded"
-                    onClick={() => telegram.openTelegramLink(inviteUrl)}
-                  >
-                    Открыть в Telegram
-                  </button>
-                )}
               </div>
             )}
           </div>
@@ -1104,4 +1100,4 @@ const App: React.FC = () => {
   );
 };
 
-export default App; 
+export default ChessLobby; 

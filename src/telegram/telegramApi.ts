@@ -180,11 +180,22 @@ export class TelegramApi {
   public showPopup(
     title: string,
     message: string,
-    buttons?:  CustomPopupButton[],
-    callback?: (buttonId?: string) => void // Добавлен колбэк
+    buttons?: CustomPopupButton[],
+    callback?: (buttonId?: string) => void
   ): void {
     try {
-      WebApp.showPopup({ title, message, buttons }, callback); // Передача callback
+      if (WebApp.isVersionAtLeast('6.0')) { // Проверяем версию и окружение
+        WebApp.showPopup({ title, message, buttons }, callback);
+      } else {
+        // Fallback для сред, где showPopup не поддерживается
+        console.warn('WebApp.showPopup не поддерживается или не в Telegram. Показываем нативный алерт.');
+        const buttonTexts = buttons ? buttons.map(b => b.text).join(', ') : 'OK';
+        alert(`${title}\n${message}\nДоступные кнопки: ${buttonTexts}`);
+        if (callback) {
+          // Для простоты, при нативном алерте можно вызвать колбэк с первым (или null) buttonId
+          callback(buttons && buttons.length > 0 ? buttons[0].id || undefined : undefined);
+        }
+      }
     } catch (error) {
       console.error('Ошибка показа всплывающего окна:', error);
     }
