@@ -39,6 +39,12 @@ export interface TelegramInitData {
   hash?: string;
 }
 
+interface CustomPopupButton {
+  id?: string;
+  type: 'default' | 'destructive'; // Сделано обязательным
+  text: string;
+}
+
 export class TelegramApi {
   private static instance: TelegramApi;
   private isInitialized = false;
@@ -170,18 +176,20 @@ export class TelegramApi {
   /**
    * Показать всплывающее окно
    */
-  public showPopup(title: string, message: string, _buttons?: Array<{
-    id?: string;
-    type?: 'default' | 'ok' | 'close' | 'cancel' | 'destructive';
-    text: string;
-  }>): void {
+  // ... existing code ...
+  public showPopup(
+    title: string,
+    message: string,
+    buttons?:  CustomPopupButton[],
+    callback?: (buttonId?: string) => void // Добавлен колбэк
+  ): void {
     try {
-      // showPopup с тремя параметрами не поддерживается
-      WebApp.showPopup({ title, message });
+      WebApp.showPopup({ title, message, buttons }, callback); // Передача callback
     } catch (error) {
       console.error('Ошибка показа всплывающего окна:', error);
     }
   }
+  // ... existing code ...
 
   /**
    * Показать алерт
@@ -204,7 +212,27 @@ export class TelegramApi {
       console.error('Ошибка показа подтверждения:', error);
     }
   }
-
+  /**\r
+   * Установить обработчик события закрытия попапа\r
+   */
+  public onPopupClosed(callback: (params: { button_id: string | null; }) => void): void {
+    try {
+      WebApp.onEvent('popupClosed', callback);
+    } catch (error) {
+      console.error('Ошибка установки обработчика popupClosed:', error);
+    }
+  }
+  
+  /**
+   * Удалить обработчик события закрытия попапа
+   */
+  public offPopupClosed(callback: (params: { button_id: string | null; }) => void): void {
+    try {
+      WebApp.offEvent('popupClosed', callback);
+    } catch (error) {
+      console.error('Ошибка удаления обработчика popupClosed:', error);
+    }
+  }
   /**
    * Закрыть приложение
    */
