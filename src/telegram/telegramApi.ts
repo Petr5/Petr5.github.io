@@ -48,6 +48,7 @@ interface CustomPopupButton {
 export class TelegramApi {
   private static instance: TelegramApi;
   private isInitialized = false;
+  private _backButtonCallback: (() => void) | null = null;
 
   private constructor() {}
 
@@ -378,10 +379,19 @@ export class TelegramApi {
    */
   public showBackButton(callback?: () => void): void {
     try {
-      if (callback) {
-        WebApp.BackButton.onClick(callback);
+      if (WebApp.isVersionAtLeast('6.0')) {
+        // Сначала удаляем предыдущий обработчик, если он был
+        if (this._backButtonCallback) {
+          WebApp.BackButton.offClick(this._backButtonCallback);
+        }
+        if (callback) {
+          this._backButtonCallback = callback;
+          WebApp.BackButton.onClick(this._backButtonCallback);
+        }
+        WebApp.BackButton.show();
+      } else {
+        console.warn('WebApp.BackButton.show не поддерживается или не в Telegram.');
       }
-      WebApp.BackButton.show();
     } catch (error) {
       console.error('Ошибка показа кнопки "Назад":', error);
     }
@@ -392,7 +402,16 @@ export class TelegramApi {
    */
   public hideBackButton(): void {
     try {
-      WebApp.BackButton.hide();
+      if (WebApp.isVersionAtLeast('6.0')) {
+        // Удаляем текущий обработчик перед скрытием кнопки
+        if (this._backButtonCallback) {
+          WebApp.BackButton.offClick(this._backButtonCallback);
+          this._backButtonCallback = null;
+        }
+        WebApp.BackButton.hide();
+      } else {
+        console.warn('WebApp.BackButton.hide не поддерживается или не в Telegram.');
+      }
     } catch (error) {
       console.error('Ошибка скрытия кнопки "Назад":', error);
     }

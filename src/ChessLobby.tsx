@@ -332,10 +332,11 @@ function canBlockCheck(
 }
 interface ChessLobbyProps {
   roomId: string;
+  onBackToMain: () => void; 
 }
 
 
-const ChessLobby: React.FC<ChessLobbyProps> = ({ roomId }) => {
+const ChessLobby: React.FC<ChessLobbyProps> = ({ roomId, onBackToMain }) => {
   const [board, setBoard] = useState<ChessPiece[][]>(initialBoard);
   const [selectedPiece, setSelectedPiece] = useState<{
     row: number;
@@ -382,12 +383,18 @@ const ChessLobby: React.FC<ChessLobbyProps> = ({ roomId }) => {
       
       // Показываем кнопку "Назад"
       telegram.showBackButton(() => {
-        telegram.close();
+        onBackToMain();
       });
       
       console.log('Telegram Web App настроен');
     }
-  }, [telegram]);
+
+    return () => {
+      if (telegram.isTelegramApp) {
+        telegram.hideBackButton(); // Скрываем кнопку "Назад" и удаляем ее обработчик
+      }
+    };
+  }, [telegram, onBackToMain]);
 
   // Инициализация лобби/комнаты
   useEffect(() => {
