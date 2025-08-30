@@ -184,7 +184,7 @@ function bindBoardEvents() {
 function renderCell(piece: string | null, color: "white" | "black" | null) {
   if (!piece || !color) return "";
 
-  const imgSrc = `/img/${piece}-${color}.webp`;
+  const imgSrc = `/img/${piece}-${color}.png`;
   return `<img
     src="${imgSrc}"
     alt="${color} ${piece}"

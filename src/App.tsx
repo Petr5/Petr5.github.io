@@ -362,81 +362,28 @@ const App: React.FC = () => {
   // Инициализация Telegram API
   const telegram = useTelegram();
 
-  const [showStartScreen, setShowStartScreen] = useState(true);
-
   // Настройка Telegram приложения
   useEffect(() => {
     if (telegram.isInitialized && telegram.isTelegramApp) {
       // Устанавливаем цвета в соответствии с темой Telegram
       telegram.setBackgroundColor(telegram.backgroundColor);
       telegram.setTextColor(telegram.textColor);
-    
-      telegram.expand();
-    
-      const currentStartParam = telegram.startParam || new URLSearchParams(window.location.search).get('room');
-      const shouldShowStartScreenNow = !currentStartParam;
-      
-      // Обновляем состояние для следующего цикла рендера
-      setShowStartScreen(shouldShowStartScreenNow);
-    
-      if (shouldShowStartScreenNow) {
-        // Скрываем MainButton, если она была показана
-        telegram.hideMainButton();
-        // Скрываем BackButton, если она была показана
-        telegram.hideBackButton();
-    
-        // Создаем кнопки для стартового экрана
-        telegram.showPopup(
-          'Выберите действие',
-          'Добро пожаловать в шахматы!',
-          [
-            { id: 'invite', type: 'default', text: 'Пригласить друга' },
-            { id: 'my_games', type: 'default', text: 'Мои партии' },
-            { id: 'close', type: 'default', text: 'Закрыть' },
-          ]
-        );
-        
-        // Обрабатываем закрытие попапа
-        const handlePopupClosed = useCallback(
-          (params: { button_id: string | null }) => {
-            const buttonId = params.button_id;
-            if (buttonId === 'invite') {
-              const botUsername = (import.meta as any).env?.VITE_TG_BOT_USERNAME || '';
-              const shareLink = botUsername
-                ? `https://t.me/${botUsername}?start=share`
-                : `${window.location.origin}`;
-              telegram.showAlert(`Поделитесь этой ссылкой с другом: ${shareLink}`, () => {});
-            } else if (buttonId === 'my_games') {
-              telegram.showAlert('Функционал "Мои партии" пока в разработке.', () => {});
-            } else if (buttonId === 'close') {
-              telegram.close();
-            }
-          },
-          [telegram]
-        );
-        
-        useEffect(() => {
-          telegram.onPopupClosed(handlePopupClosed);
-          return () => {
-            // @ts-ignore
-            telegram.offPopupClosed(handlePopupClosed); // Отписываемся от события при размонтировании
-          };
-        }, [telegram, handlePopupClosed]);
-        
-      } else {
-        // Показываем главную кнопку для новой игры
-        telegram.showMainButton('Новая игра', () => {
-          window.location.reload();
-        });
 
-        // Показываем кнопку "Назад"
-        telegram.showBackButton(() => {
-          telegram.close();
-        });
-      }
+      telegram.expand();
+      
+      // Показываем главную кнопку для новой игры
+      telegram.showMainButton('Новая игра', () => {
+        window.location.reload();
+      });
+      
+      // Показываем кнопку "Назад"
+      telegram.showBackButton(() => {
+        telegram.close();
+      });
+      
       console.log('Telegram Web App настроен');
     }
-  }, [telegram, showStartScreen]);
+  }, [telegram]);
 
   // Инициализация лобби/комнаты
   useEffect(() => {
@@ -1037,7 +984,7 @@ const App: React.FC = () => {
         )}
         {piece.piece && (
           <img
-            src={`/img/${piece.piece}-${piece.color}.webp`}
+            src={`/img/${piece.piece}-${piece.color}.png`}
             alt={`${piece.color} ${piece.piece}`}
             className="w-[80%] h-[80%] object-contain cursor-pointer select-none piece"
             onMouseDown={(e) => handleMouseDown(e, row, col)}
@@ -1137,16 +1084,16 @@ const App: React.FC = () => {
           <div className="absolute inset-0 flex items-center justify-center z-50">
             <div className="bg-white rounded-lg shadow-lg p-2 flex flex-col items-center gap-2">
               <button className="p-1 hover:bg-gray-100 rounded" onClick={() => handlePromote('queen')}>
-                <img src={`/img/queen-${promotion.color}.webp`} alt="" className="w-16 h-16 object-contain" />
+                <img src={`/img/queen-${promotion.color}.png`} alt="" className="w-16 h-16 object-contain" />
               </button>
               <button className="p-1 hover:bg-gray-100 rounded" onClick={() => handlePromote('rook')}>
-                <img src={`/img/rook-${promotion.color}.webp`} alt="" className="w-16 h-16 object-contain" />
+                <img src={`/img/rook-${promotion.color}.png`} alt="" className="w-16 h-16 object-contain" />
               </button>
               <button className="p-1 hover:bg-gray-100 rounded" onClick={() => handlePromote('bishop')}>
-                <img src={`/img/bishop-${promotion.color}.webp`} alt="" className="w-16 h-16 object-contain" />
+                <img src={`/img/bishop-${promotion.color}.png`} alt="" className="w-16 h-16 object-contain" />
               </button>
               <button className="p-1 hover:bg-gray-100 rounded" onClick={() => handlePromote('knight')}>
-                <img src={`/img/knight-${promotion.color}.webp`} alt="" className="w-16 h-16 object-contain" />
+                <img src={`/img/knight-${promotion.color}.png`} alt="" className="w-16 h-16 object-contain" />
               </button>
             </div>
           </div>

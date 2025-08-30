@@ -1,10 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
 import TelegramApi, { TelegramUser, TelegramThemeParams } from './telegramApi';
-interface CustomPopupButton {
-  id?: string;
-  type: 'default' | 'destructive'; // Сделано обязательным
-  text: string;
-}
 
 export interface UseTelegramReturn {
   // Состояние
@@ -22,7 +17,11 @@ export interface UseTelegramReturn {
   init: () => void;
   showMainButton: (text: string, callback?: () => void) => void;
   hideMainButton: () => void;
-  showPopup: (title: string, message: string, buttons?:  CustomPopupButton[], callback?: (buttonId?: string) => void) => void;
+  showPopup: (title: string, message: string, buttons?: Array<{
+    id?: string;
+    type?: 'default' | 'ok' | 'close' | 'cancel' | 'destructive';
+    text: string;
+  }>) => void;
   showAlert: (message: string, callback?: () => void) => void;
   showConfirm: (message: string, callback?: (confirmed: boolean) => void) => void;
   close: () => void;
@@ -38,7 +37,6 @@ export interface UseTelegramReturn {
   onMainButtonClicked: (callback: () => void) => void;
   onBackButtonClicked: (callback: () => void) => void;
   openTelegramLink: (url: string) => void;
-  onPopupClosed: (callback: (params: { button_id: string | null; }) => void) => void;
 }
 
 export const useTelegram = (): UseTelegramReturn => {
@@ -120,12 +118,13 @@ export const useTelegram = (): UseTelegramReturn => {
   }, [telegramApi]);
 
   // Методы для показа диалогов
-  const showPopup = useCallback(
-    (title: string, message: string, buttons?:  CustomPopupButton[], callback?: (buttonId?: string) => void) => { // Обновленная сигнатура
-      telegramApi.showPopup(title, message, buttons, callback);
-    },
-    [telegramApi]
-  );
+  const showPopup = useCallback((title: string, message: string, buttons?: Array<{
+    id?: string;
+    type?: 'default' | 'ok' | 'close' | 'cancel' | 'destructive';
+    text: string;
+  }>) => {
+    telegramApi.showPopup(title, message, buttons);
+  }, [telegramApi]);
 
   const showAlert = useCallback((message: string, callback?: () => void) => {
     telegramApi.showAlert(message, callback);
@@ -193,13 +192,6 @@ export const useTelegram = (): UseTelegramReturn => {
     telegramApi.openTelegramLink(url);
   }, [telegramApi]);
 
-  const onPopupClosed = useCallback(
-    (callback: (params: { button_id: string | null }) => void) => {
-      telegramApi.onPopupClosed(callback);
-    },
-    [telegramApi]
-  );
-
   return {
     // Состояние
     isInitialized,
@@ -232,6 +224,5 @@ export const useTelegram = (): UseTelegramReturn => {
     onMainButtonClicked,
     onBackButtonClicked,
     openTelegramLink,
-    onPopupClosed
   };
 }; 
