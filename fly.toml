@@ -3,6 +3,18 @@ primary_region = "ams"
 
 [build]
 
+[[services]]
+  internal_port = 5432 # Postgres instance
+  protocol = "tcp"
+
+[[services.ports]]
+  handlers = ["pg_tls"]
+  port = 5432
+
+[mounts]
+  source = "pg_data"
+  destination = "/data"
+  
 [http_service]
   internal_port = 3000
   force_https = true

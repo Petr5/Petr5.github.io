@@ -2,13 +2,13 @@
 import React, { useEffect, useCallback, useState } from 'react';
 import { useTelegram } from './telegram/useTelegram';
 import './index.css';
-import ChessLobby from './ChessLobby'; // Убедимся, что ChessLobby импортирован
+import ChessLobby from './ChessLobby';
+import MyGames from './MyGames';
 
 const App: React.FC = () => {
     // Деструктурируем все необходимые свойства из useTelegram
     const {
         init,
-        showAlert,
         expand,
         isTelegramApp,
         showMainButton,
@@ -22,6 +22,7 @@ const App: React.FC = () => {
     } = useTelegram();
 
     const [roomId, setRoomId] = useState<string | null>(null);
+    const [showMyGames, setShowMyGames] = useState<boolean>(false);
 
     useEffect(() => {
         init();
@@ -92,11 +93,25 @@ const App: React.FC = () => {
 
 
     const handleMyGames = () => {
-        showAlert('Мои партии - функционал пока не реализован!');
+        setShowMyGames(true);
+    };
+
+    const handleBackToMain = () => {
+        setShowMyGames(false);
+        setRoomId(null);
+    };
+
+    const handleJoinGame = (gameRoomId: string) => {
+        setRoomId(gameRoomId);
+        setShowMyGames(false);
     };
 
     if (roomId) {
-        return <ChessLobby roomId={roomId} onBackToMain={() => setRoomId(null)} />;
+        return <ChessLobby roomId={roomId} onBackToMain={handleBackToMain} />;
+    }
+
+    if (showMyGames) {
+        return <MyGames onBackToMain={handleBackToMain} onJoinGame={handleJoinGame} />;
     }
 
     return (

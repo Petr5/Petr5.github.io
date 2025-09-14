@@ -103,6 +103,10 @@ export class LobbyClient {
     this.transport.send(message);
   }
 
+  sendMessage(message: any): void {
+    this.transport.send(message);
+  }
+
   getRoomId(): string {
     return this.state.roomId;
   }

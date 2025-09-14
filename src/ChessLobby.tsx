@@ -447,6 +447,17 @@ const ChessLobby: React.FC<ChessLobbyProps> = ({ roomId, onBackToMain }) => {
   // Функция для обработки победы
   const handleWin = useCallback((winner: 'white' | 'black') => {
     setWinner(winner);
+    
+    // Отправляем событие о завершении игры
+    if (lobbyRef.current) {
+      lobbyRef.current.sendMessage({
+        type: 'game_end',
+        roomId: roomId,
+        senderId: String(telegram.user?.id),
+        payload: { winner }
+      });
+    }
+    
     // Показываем уведомление в Telegram
     if (telegram.isTelegramApp) {
       telegram.showAlert(
@@ -456,7 +467,7 @@ const ChessLobby: React.FC<ChessLobbyProps> = ({ roomId, onBackToMain }) => {
         }
       );
     }
-  }, [telegram]);
+  }, [telegram, roomId]);
 
   // Добавляем функцию проверки на мат
   const isCheckmate = useCallback((color: 'white' | 'black'): boolean => {

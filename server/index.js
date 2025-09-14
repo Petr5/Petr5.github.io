@@ -21,14 +21,49 @@ const pool = new Pool({
 
 async function initDb() {
   await pool.query(`
-    CREATE TABLE IF NOT EXISTS rooms (
-      id VARCHAR(255) PRIMARY KEY,
-      events JSONB NOT NULL DEFAULT '[]',
-      last_id INTEGER NOT NULL DEFAULT 0,
-      current_turn VARCHAR(5) NOT NULL DEFAULT 'white',
-      players JSONB NOT NULL DEFAULT '{}'
-    );
+        CREATE TABLE IF NOT EXISTS rooms (
+          id VARCHAR(255) PRIMARY KEY,
+          events JSONB NOT NULL DEFAULT '[]',
+          last_id INTEGER NOT NULL DEFAULT 0,
+          current_turn VARCHAR(5) NOT NULL DEFAULT 'white',
+          players JSONB NOT NULL DEFAULT '{}',
+          player_names JSONB NOT NULL DEFAULT '{}',
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          status VARCHAR(20) DEFAULT 'active'
+        );
   `);
+  
+  // Добавляем поля к существующим таблицам, если их нет
+  try {
+    await pool.query(`
+      ALTER TABLE rooms 
+      ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+    `);
+    console.log('Added created_at column if it did not exist.');
+  } catch (error) {
+    console.log('Column created_at might already exist or error adding it:', error.message);
+  }
+  
+  try {
+    await pool.query(`
+      ALTER TABLE rooms 
+      ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'active';
+    `);
+    console.log('Added status column if it did not exist.');
+  } catch (error) {
+    console.log('Column status might already exist or error adding it:', error.message);
+  }
+
+  try {
+    await pool.query(`
+      ALTER TABLE rooms 
+      ADD COLUMN IF NOT EXISTS player_names JSONB NOT NULL DEFAULT '{}';
+    `);
+    console.log('Added player_names column if it did not exist.');
+  } catch (error) {
+    console.log('Column player_names might already exist or error adding it:', error.message);
+  }
+  
   console.log('Database initialized successfully.');
 }
 
@@ -54,10 +89,11 @@ async function ensureRoom(roomId) {
     const res = await client.query('SELECT * FROM rooms WHERE id = $1', [roomId]);
     if (res.rows.length > 0) {
       roomData = res.rows[0];
-      console.log(`[ensureRoom] Fetched room ${roomId} from DB:`, roomData.events, roomData.players);
+      console.log(`[ensureRoom] Fetched room ${roomId} from DB:`, roomData.events, roomData.players, roomData.player_names);
       roomData.events = ensureParsedJsonb(roomData.events, []);
       roomData.players = ensureParsedJsonb(roomData.players, {});
-      console.log(`[ensureRoom] Parsed room ${roomId} from DB:`, roomData.events, roomData.players);
+      roomData.player_names = ensureParsedJsonb(roomData.player_names, {});
+      console.log(`[ensureRoom] Parsed room ${roomId} from DB:`, roomData.events, roomData.players, roomData.player_names);
     } else {
       // Create new room
       roomData = {
@@ -66,10 +102,11 @@ async function ensureRoom(roomId) {
         last_id: 0,
         current_turn: 'white',
         players: {},
+        player_names: {},
       };
       await client.query(
-        'INSERT INTO rooms (id, events, last_id, current_turn, players) VALUES ($1, $2, $3, $4, $5)',
-        [roomData.id, JSON.stringify(roomData.events), roomData.last_id, roomData.current_turn, JSON.stringify(roomData.players)]
+        'INSERT INTO rooms (id, events, last_id, current_turn, players, player_names) VALUES ($1, $2, $3, $4, $5, $6)',
+        [roomData.id, JSON.stringify(roomData.events), roomData.last_id, roomData.current_turn, JSON.stringify(roomData.players), JSON.stringify(roomData.player_names)]
       );
       console.log(`[ensureRoom] Created new room ${roomId} in DB.`);
     }
@@ -121,6 +158,56 @@ async function addEvent(room, message) {
 }
 app.get('/health', (_req, res) => res.json({ ok: true }));
 
+// API endpoint для получения партий пользователя
+app.get('/api/games/:userId', async (req, res) => {
+  try {
+    const userId = req.params.userId;
+    const client = await pool.connect();
+    
+    try {
+      // Получаем все партии, где пользователь является игроком (белым или черным)
+      const result = await client.query(`
+        SELECT 
+          id,
+          players,
+          COALESCE(player_names, '{}') as player_names,
+          current_turn,
+          last_id,
+          created_at,
+          COALESCE(status, 'active') as status,
+          CASE 
+            WHEN events @> '[{"type": "game_end", "payload": {"winner": "white"}}]' THEN 'white'
+            WHEN events @> '[{"type": "game_end", "payload": {"winner": "black"}}]' THEN 'black'
+            ELSE NULL
+          END as winner
+        FROM rooms 
+        WHERE players->>'white' = $1 
+           OR players->>'black' = $1
+        ORDER BY id DESC
+        LIMIT 50
+      `, [userId]);
+      
+      const games = result.rows.map(row => ({
+        id: row.id,
+        players: row.players,
+        player_names: row.player_names,
+        current_turn: row.current_turn,
+        last_id: row.last_id,
+        created_at: row.created_at,
+        status: row.status,
+        winner: row.winner
+      }));
+      
+      res.json({ games });
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error(`[GET /api/games/:userId] Error:`, error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
 app.post('/rooms/:roomId/events', async (req, res) => {
   try {
     const roomId = req.params.roomId;
@@ -139,18 +226,41 @@ app.post('/rooms/:roomId/events', async (req, res) => {
     // Presence handling: allow client to announce desired color and presence
     if (type === 'presence') {
       const desired = message.payload?.desiredColor;
+      const playerName = message.payload?.displayName;
+      
       if (message.payload?.joined) {
         if (!room.players.white && desired === 'white') {
           room.players.white = senderId;
+          if (playerName) {
+            room.player_names = room.player_names || {};
+            room.player_names.white = playerName;
+          }
         } else if (!room.players.black && desired === 'black') {
           room.players.black = senderId;
+          if (playerName) {
+            room.player_names = room.player_names || {};
+            room.player_names.black = playerName;
+          }
         }
       } else {
-        if (room.players.white === senderId) delete room.players.white;
-        if (room.players.black === senderId) delete room.players.black;
+        if (room.players.white === senderId) {
+          delete room.players.white;
+          if (room.player_names) delete room.player_names.white;
+        }
+        if (room.players.black === senderId) {
+          delete room.players.black;
+          if (room.player_names) delete room.player_names.black;
+        }
       }
+      
+      // Обновляем базу данных с новыми данными игроков
+      await client.query(
+        'UPDATE rooms SET players = $1, player_names = $2 WHERE id = $3',
+        [JSON.stringify(room.players), JSON.stringify(room.player_names || {}), roomId]
+      );
+      
       const id = await addEvent(room, message);
-      console.log(`[presence] room=${roomId} id=${id} sender=${senderId} desired=${desired} players=`, room.players);
+      console.log(`[presence] room=${roomId} id=${id} sender=${senderId} desired=${desired} players=`, room.players, 'names=', room.player_names);
       return res.status(201).json({ id });
     }
 
@@ -171,6 +281,27 @@ app.post('/rooms/:roomId/events', async (req, res) => {
     
       const id = await addEvent(room, message);
       console.log(`[move] room=${roomId} id=${id} sender=${senderId} nextTurn=${room.currentTurn}`);
+      return res.status(201).json({ id });
+    }
+
+    // Game end handling
+    if (type === 'game_end') {
+      // Обновляем статус игры на 'finished'
+      const client = await pool.connect();
+      try {
+        await client.query(
+          'UPDATE rooms SET status = $1 WHERE id = $2',
+          ['finished', roomId]
+        );
+        console.log(`[game_end] Updated room ${roomId} status to finished`);
+      } catch (error) {
+        console.error(`[game_end] Error updating room status:`, error);
+      } finally {
+        client.release();
+      }
+      
+      const id = await addEvent(room, message);
+      console.log(`[game_end] room=${roomId} id=${id} sender=${senderId} winner=${message.payload?.winner}`);
       return res.status(201).json({ id });
     }
 
