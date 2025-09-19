@@ -242,15 +242,6 @@ app.post('/rooms/:roomId/events', async (req, res) => {
             room.player_names.black = playerName;
           }
         }
-      } else {
-        if (room.players.white === senderId) {
-          delete room.players.white;
-          if (room.player_names) delete room.player_names.white;
-        }
-        if (room.players.black === senderId) {
-          delete room.players.black;
-          if (room.player_names) delete room.player_names.black;
-        }
       }
       
       // Обновляем базу данных с новыми данными игроков

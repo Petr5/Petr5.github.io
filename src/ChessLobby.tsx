@@ -396,9 +396,74 @@ const ChessLobby: React.FC<ChessLobbyProps> = ({ roomId, onBackToMain }) => {
     };
   }, [telegram, onBackToMain]);
 
+  // Восстановление состояния партии по истории событий
+  const restoreGameState = useCallback(async (roomId: string) => {
+    // Определяем базу API
+    let apiBase = (import.meta as any).env?.VITE_API_BASE?.trim();
+    if (!apiBase && typeof window !== 'undefined') {
+      const host = window.location.hostname;
+      if (host === 'localhost' || host === '127.0.0.1') {
+        apiBase = 'http://localhost:3000';
+      }
+    }
+    if (!apiBase) return;
+    try {
+      const res = await fetch(`${apiBase}/rooms/${encodeURIComponent(roomId)}/events`);
+      if (!res.ok) return;
+      const data = await res.json();
+      // data.events: [{ message: NetMessage }]
+      let curBoard: ChessPiece[][] = initialBoard.map(row => row.map(cell => ({ ...cell })));
+      let curTurn: 'white' | 'black' = 'white';
+      let gameWinner: 'white' | 'black' | null = null;
+      for (const evt of data.events) {
+        const msg = evt.message || evt; // evt может быть либо {message}, либо сразу NetMessage
+        if (msg.type === 'move') {
+          const { fromRow, fromCol, toRow, toCol, promotion } = msg.payload;
+          const mover = curBoard[fromRow][fromCol];
+          if (!mover.piece) continue;
+          // Рокировка
+          if (mover.piece === 'king' && Math.abs(toCol - fromCol) === 2) {
+            // Перемещаем короля
+            curBoard[toRow][toCol] = mover;
+            curBoard[fromRow][fromCol] = { piece: null, color: null };
+            // Перемещаем ладью
+            const isKingSide = toCol > fromCol;
+            const rookFromCol = isKingSide ? 7 : 0;
+            const rookToCol = isKingSide ? toCol - 1 : toCol + 1;
+            curBoard[toRow][rookToCol] = curBoard[fromRow][rookFromCol];
+            curBoard[fromRow][rookFromCol] = { piece: null, color: null };
+            if (curBoard[toRow][rookToCol]) curBoard[toRow][rookToCol].hasMoved = true;
+            if (curBoard[toRow][toCol]) curBoard[toRow][toCol].hasMoved = true;
+          } else {
+            // Обычный ход
+            curBoard[toRow][toCol] = mover;
+            curBoard[fromRow][fromCol] = { piece: null, color: null };
+            // Превращение пешки
+            if (promotion && mover.piece === 'pawn') {
+              curBoard[toRow][toCol] = { piece: promotion, color: mover.color };
+            }
+            if (curBoard[toRow][toCol].piece === 'king' || curBoard[toRow][toCol].piece === 'rook') {
+              curBoard[toRow][toCol].hasMoved = true;
+            }
+          }
+          curTurn = curTurn === 'white' ? 'black' : 'white';
+        } else if (msg.type === 'game_end' && msg.payload?.winner) {
+          gameWinner = msg.payload.winner;
+        }
+      }
+      setBoard(curBoard.map(row => row.map(cell => ({ ...cell }))));
+      setCurrentTurn(curTurn);
+      setWinner(gameWinner);
+    } catch (e) {
+      // Ошибка загрузки — оставляем начальное состояние
+    }
+  }, []);
+
   // Инициализация лобби/комнаты
   useEffect(() => {
-    if (!telegram.isInitialized || !roomId) return; 
+    if (!telegram.isInitialized || !roomId) return;
+    // Восстанавливаем состояние партии
+    restoreGameState(roomId);
 
     // const urlRoom = new URLSearchParams(window.location.search).get('room') || undefined;
     // const startParam = telegram.startParam || urlRoom;
