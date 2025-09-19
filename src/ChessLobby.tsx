@@ -464,66 +464,43 @@ const ChessLobby: React.FC<ChessLobbyProps> = ({ roomId, onBackToMain }) => {
   useEffect(() => {
     if (!telegram.isInitialized || !roomId) return;
     restoreGameState(roomId);
-    let apiBase = (import.meta as any).env?.VITE_API_BASE?.trim();
 
     const meId = String(telegram.user?.id ?? (typeof crypto !== 'undefined' ? crypto.randomUUID() : Math.random().toString(36).slice(2)));
     const meName = telegram.user?.username || telegram.user?.first_name || 'Player';
 
-    let playerColor: PlayerColor = 'white'; // Default to white
+    // Если мы зашли по приглашению (есть start_param) — будем играть чёрными, иначе белыми
+    const color: PlayerColor = telegram.startParam === roomId ? 'black' : 'white';
+    setSelfColor(color);
 
-    const fetchPlayerColor = async () => {
-      try {
-        const colorRes = await fetch(
-          `${apiBase}/rooms/${encodeURIComponent(roomId)}/playerColor?userId=${meId}`
-        );
-        if (colorRes.ok) {
-          const { color } = await colorRes.json();
-          if (color) {
-            playerColor = color;
-          }
-        }
-      } catch (error) {
-        console.error('Error fetching player color:', error);
-      } finally {
-        // Fallback to existing logic if color not found or error
-        if (!playerColor) {
-          playerColor = telegram.startParam === roomId ? 'black' : 'white';
-        }
-        setSelfColor(playerColor);
-    
-        // Создаём клиент лобби
-        if (lobbyRef.current) {
-          lobbyRef.current.dispose();
-        }
-        lobbyRef.current = new LobbyClient({
-          roomId: roomId,
-          self: { userId: meId, displayName: meName },
-          selfColor: playerColor,
-          events: {
-            onMove: (_opponent, payload) => {
-              applyRemoteMoveRef.current && applyRemoteMoveRef.current(payload);
-            },
-          },
-        });
-    
-        // Подготовим ссылку-приглашение в бота
-        const botUsername = (import.meta as any).env?.VITE_TG_BOT_USERNAME || '';
-        const deepLink = botUsername
-          ? `https://t.me/${botUsername}?startapp=${roomId}`
-          : `${window.location.origin}?room=${roomId}`;
-        setInviteUrl(deepLink);
-      }
-    };
-    
-    fetchPlayerColor();
-    
+    // Создаём клиент лобби (пока транспорт локальный; заменим на WS позже)
+    if (lobbyRef.current) {
+      lobbyRef.current.dispose();
+    }
+    lobbyRef.current = new LobbyClient({
+      roomId: roomId,
+      self: { userId: meId, displayName: meName },
+      selfColor: color,
+      events: {
+        onMove: (_opponent, payload) => {
+          // Применяем ход соперника через ref, чтобы не терять актуальное состояние
+          applyRemoteMoveRef.current && applyRemoteMoveRef.current(payload);
+        },
+      },
+    });
+
+    // Подготовим ссылку-приглашение в бота
+    const botUsername = (import.meta as any).env?.VITE_TG_BOT_USERNAME || '';
+    const deepLink = botUsername
+      ? `https://t.me/${botUsername}?startapp=${roomId}`
+      : `${window.location.origin}?room=${roomId}`;
+    setInviteUrl(deepLink);
+
     return () => {
       lobbyRef.current?.dispose();
       lobbyRef.current = null;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [telegram.isInitialized, roomId, telegram.startParam, restoreGameState]);
-    
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [telegram.isInitialized, roomId, telegram.startParam]);
 
   // Функция для обработки победы
   const handleWin = useCallback((winner: 'white' | 'black') => {
@@ -1059,14 +1036,14 @@ const ChessLobby: React.FC<ChessLobbyProps> = ({ roomId, onBackToMain }) => {
       >
         {/* Цифровые метки (ряды) - в верхнем левом углу */}
         {(selfColor === 'white' && col === 0) || (selfColor === 'black' && col === 7) ? (
-          <span className="absolute top-0 left-1 text-gray-700 text-xs md:text-sm font-semibold pointer-events-none">
+          <span className="absolute top-0 left-1 text-gray-700 text-xs md:text-sm font-semibold pointer-events-none select-none">
             {ranks[row]}
           </span>
         ) : null}
           
         {/* Буквенные метки (колонки) - в нижнем правом углу */}
         {(selfColor === 'white' && row === 7) || (selfColor === 'black' && row === 0) ? (
-          <span className="absolute bottom-0 right-1 text-gray-700 text-xs md:text-sm font-semibold pointer-events-none">
+          <span className="absolute bottom-0 right-1 text-gray-700 text-xs md:text-sm font-semibold pointer-events-none select-none">
             {files[col]}
           </span>
         ) : null}
