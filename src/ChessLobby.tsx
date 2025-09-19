@@ -1071,7 +1071,7 @@ const ChessLobby: React.FC<ChessLobbyProps> = ({ roomId, onBackToMain }) => {
         )}
         {piece.piece && (
           <img
-            src={`/img/${piece.piece}-${piece.color}.png`}
+            src={`/img/${piece.piece}-${piece.color}.webp`}
             alt={`${piece.color} ${piece.piece}`}
             className="w-[80%] h-[80%] object-contain cursor-pointer select-none piece"
             onMouseDown={(e) => handleMouseDown(e, row, col)}
@@ -1163,16 +1163,16 @@ const ChessLobby: React.FC<ChessLobbyProps> = ({ roomId, onBackToMain }) => {
           <div className="absolute inset-0 flex items-center justify-center z-50">
             <div className="bg-white rounded-lg shadow-lg p-2 flex flex-col items-center gap-2">
               <button className="p-1 hover:bg-gray-100 rounded" onClick={() => handlePromote('queen')}>
-                <img src={`/img/queen-${promotion.color}.png`} alt="" className="w-16 h-16 object-contain" />
+                <img src={`/img/queen-${promotion.color}.webp`} alt="" className="w-16 h-16 object-contain" />
               </button>
               <button className="p-1 hover:bg-gray-100 rounded" onClick={() => handlePromote('rook')}>
-                <img src={`/img/rook-${promotion.color}.png`} alt="" className="w-16 h-16 object-contain" />
+                <img src={`/img/rook-${promotion.color}.webp`} alt="" className="w-16 h-16 object-contain" />
               </button>
               <button className="p-1 hover:bg-gray-100 rounded" onClick={() => handlePromote('bishop')}>
-                <img src={`/img/bishop-${promotion.color}.png`} alt="" className="w-16 h-16 object-contain" />
+                <img src={`/img/bishop-${promotion.color}.webp`} alt="" className="w-16 h-16 object-contain" />
               </button>
               <button className="p-1 hover:bg-gray-100 rounded" onClick={() => handlePromote('knight')}>
-                <img src={`/img/knight-${promotion.color}.png`} alt="" className="w-16 h-16 object-contain" />
+                <img src={`/img/knight-${promotion.color}.webp`} alt="" className="w-16 h-16 object-contain" />
               </button>
             </div>
           </div>
