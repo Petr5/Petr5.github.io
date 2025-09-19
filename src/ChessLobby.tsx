@@ -376,10 +376,11 @@ const ChessLobby: React.FC<ChessLobbyProps> = ({ roomId, onBackToMain }) => {
 
       telegram.expand();
       
-      // Показываем главную кнопку для новой игры
-      telegram.showMainButton('Новая игра', () => {
-        window.location.reload();
-      });
+      // // Показываем главную кнопку для новой игры
+      // telegram.showMainButton('Новая игра', () => {
+      //   window.location.reload();
+      // });
+      telegram.hideMainButton();
       
       // Показываем кнопку "Назад"
       telegram.showBackButton(() => {
@@ -462,52 +463,67 @@ const ChessLobby: React.FC<ChessLobbyProps> = ({ roomId, onBackToMain }) => {
   // Инициализация лобби/комнаты
   useEffect(() => {
     if (!telegram.isInitialized || !roomId) return;
-    // Восстанавливаем состояние партии
     restoreGameState(roomId);
-
-    // const urlRoom = new URLSearchParams(window.location.search).get('room') || undefined;
-    // const startParam = telegram.startParam || urlRoom;
-    // const createdRoomId = startParam && startParam.length > 0
-    //   ? startParam
-    //   : (typeof crypto !== 'undefined' ? crypto.randomUUID().slice(0, 8) : Math.random().toString(36).slice(2, 10));
-    // setRoomId(createdRoomId);
+    let apiBase = (import.meta as any).env?.VITE_API_BASE?.trim();
 
     const meId = String(telegram.user?.id ?? (typeof crypto !== 'undefined' ? crypto.randomUUID() : Math.random().toString(36).slice(2)));
     const meName = telegram.user?.username || telegram.user?.first_name || 'Player';
 
-    // Если мы зашли по приглашению (есть start_param) — будем играть чёрными, иначе белыми
-    const color: PlayerColor = telegram.startParam === roomId ? 'black' : 'white';
-    setSelfColor(color);
+    let playerColor: PlayerColor = 'white'; // Default to white
 
-    // Создаём клиент лобби (пока транспорт локальный; заменим на WS позже)
-    if (lobbyRef.current) {
-      lobbyRef.current.dispose();
-    }
-    lobbyRef.current = new LobbyClient({
-      roomId: roomId,
-      self: { userId: meId, displayName: meName },
-      selfColor: color,
-      events: {
-        onMove: (_opponent, payload) => {
-          // Применяем ход соперника через ref, чтобы не терять актуальное состояние
-          applyRemoteMoveRef.current && applyRemoteMoveRef.current(payload);
-        },
-      },
-    });
-
-    // Подготовим ссылку-приглашение в бота
-    const botUsername = (import.meta as any).env?.VITE_TG_BOT_USERNAME || '';
-    const deepLink = botUsername
-      ? `https://t.me/${botUsername}?startapp=${roomId}`
-      : `${window.location.origin}?room=${roomId}`;
-    setInviteUrl(deepLink);
-
+    const fetchPlayerColor = async () => {
+      try {
+        const colorRes = await fetch(
+          `${apiBase}/rooms/${encodeURIComponent(roomId)}/playerColor?userId=${meId}`
+        );
+        if (colorRes.ok) {
+          const { color } = await colorRes.json();
+          if (color) {
+            playerColor = color;
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching player color:', error);
+      } finally {
+        // Fallback to existing logic if color not found or error
+        if (!playerColor) {
+          playerColor = telegram.startParam === roomId ? 'black' : 'white';
+        }
+        setSelfColor(playerColor);
+    
+        // Создаём клиент лобби
+        if (lobbyRef.current) {
+          lobbyRef.current.dispose();
+        }
+        lobbyRef.current = new LobbyClient({
+          roomId: roomId,
+          self: { userId: meId, displayName: meName },
+          selfColor: playerColor,
+          events: {
+            onMove: (_opponent, payload) => {
+              applyRemoteMoveRef.current && applyRemoteMoveRef.current(payload);
+            },
+          },
+        });
+    
+        // Подготовим ссылку-приглашение в бота
+        const botUsername = (import.meta as any).env?.VITE_TG_BOT_USERNAME || '';
+        const deepLink = botUsername
+          ? `https://t.me/${botUsername}?startapp=${roomId}`
+          : `${window.location.origin}?room=${roomId}`;
+        setInviteUrl(deepLink);
+      }
+    };
+    
+    fetchPlayerColor();
+    
     return () => {
       lobbyRef.current?.dispose();
       lobbyRef.current = null;
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [telegram.isInitialized, roomId, telegram.startParam]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [telegram.isInitialized, roomId, telegram.startParam, restoreGameState]);
+    
 
   // Функция для обработки победы
   const handleWin = useCallback((winner: 'white' | 'black') => {
@@ -1108,11 +1124,18 @@ const ChessLobby: React.FC<ChessLobbyProps> = ({ roomId, onBackToMain }) => {
               <div className="mt-2 flex items-center justify-center gap-2">
                 <button
                   className="bg-blue-500 hover:bg-blue-600 text-white text-sm py-1 px-3 rounded"
-                  onClick={() => navigator.clipboard?.writeText(inviteUrl)}
+                  onClick={() => {
+                    const shareText = encodeURIComponent("Присоединяйся ко мне в шахматы!");
+                    const shareUrl = encodeURIComponent(`https://t.me/twa_chess_ton_bot?startapp=${roomId}`);
+                    telegram.openTelegramLink(
+                      `https://t.me/share/url?url=${shareUrl}&text=${shareText}`
+                    );
+                  }}
                 >
-                  Скопировать приглашение
+                  Поделиться с контактами Telegram
                 </button>
               </div>
+
             )}
           </div>
         )}
