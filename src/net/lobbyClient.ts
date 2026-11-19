@@ -1,6 +1,6 @@
 import { BroadcastTransport } from './broadcastTransport';
 import RestTransport from './restTransport';
-import { MovePayload, NetMessage, PlayerColor, Transport, UserIdentity } from './types';
+import { MovePayload, NetMessage, PlayerColor, ServerClock, Transport, UserIdentity } from './types';
 
 export interface LobbyState {
   roomId: string;
@@ -13,6 +13,9 @@ export type LobbyEvents = {
   onOpponentJoined?: (opponent: UserIdentity) => void;
   onOpponentLeft?: () => void;
   onMove?: (sender: UserIdentity, payload: MovePayload) => void;
+  onMatchStarted?: () => void;
+  onGameEnd?: (winner: PlayerColor, reason: 'checkmate' | 'timeout', prize: number) => void;
+  onClock?: (clock: ServerClock) => void;
 };
 
 export class LobbyClient {
@@ -25,6 +28,7 @@ export class LobbyClient {
     roomId: string;
     self: UserIdentity;
     selfColor: PlayerColor;
+    initData?: string;
     events?: LobbyEvents;
   }) {
     if (params.transport) {
@@ -37,7 +41,7 @@ export class LobbyClient {
           apiBase = 'http://localhost:3000';
         }
       }
-      this.transport = apiBase ? new RestTransport(apiBase) : new BroadcastTransport();
+      this.transport = apiBase ? new RestTransport(apiBase, params.initData) : new BroadcastTransport();
     }
     this.state = {
       roomId: params.roomId,
@@ -48,6 +52,7 @@ export class LobbyClient {
     this.events = params.events ?? {};
 
     this.transport.onMessage((message) => this.handleMessage(message));
+    this.transport.onClock?.((clock) => this.events.onClock?.(clock));
     this.transport.connect(this.getChannelName(params.roomId));
     this.announcePresence(true);
   }
@@ -68,12 +73,14 @@ export class LobbyClient {
       senderId: this.state.self.userId,
       payload: { joined, desiredColor: this.state.selfColor, displayName: this.state.self.displayName },
     };
-    this.transport.send(message);
+    void Promise.resolve(this.transport.send(message)).catch((error) => {
+      console.error('Failed to send lobby presence:', error);
+    });
   }
 
   private handleMessage(message: NetMessage): void {
     if (message.roomId !== this.state.roomId) return;
-    if (message.senderId === this.state.self.userId) return;
+    if (message.senderId === this.state.self.userId && message.type !== 'game_end') return;
 
     if (message.type === 'presence') {
       if (message.payload.joined) {
@@ -91,6 +98,15 @@ export class LobbyClient {
       this.events.onMove?.(opponent, message.payload);
       return;
     }
+
+    if (message.type === 'match_started') {
+      this.events.onMatchStarted?.();
+      return;
+    }
+
+    if (message.type === 'game_end') {
+      this.events.onGameEnd?.(message.payload.winner, message.payload.reason, message.payload.prize);
+    }
   }
 
   sendMove(payload: MovePayload): void {
@@ -100,11 +116,13 @@ export class LobbyClient {
       senderId: this.state.self.userId,
       payload,
     };
-    this.transport.send(message);
+    void Promise.resolve(this.transport.send(message)).catch((error) => {
+      console.error('Failed to send chess move:', error);
+    });
   }
 
-  sendMessage(message: any): void {
-    this.transport.send(message);
+  sendMessage(message: NetMessage): Promise<void> {
+    return Promise.resolve(this.transport.send(message));
   }
 
   getRoomId(): string {

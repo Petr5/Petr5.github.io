@@ -224,6 +224,22 @@ export class TelegramApi {
       console.error('Ошибка показа подтверждения:', error);
     }
   }
+
+  public openInvoice(
+    url: string,
+    callback?: (status: 'paid' | 'cancelled' | 'failed' | 'pending') => void
+  ): void {
+    try {
+      if (!WebApp.isVersionAtLeast('6.1')) {
+        console.warn('Telegram invoice is not supported in this version');
+        return;
+      }
+      WebApp.openInvoice(url, callback);
+    } catch (error) {
+      console.error('Ошибка открытия счёта Telegram:', error);
+    }
+  }
+
   /**\r
    * Установить обработчик события закрытия попапа\r
    */

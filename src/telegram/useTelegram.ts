@@ -11,6 +11,7 @@ export interface UseTelegramReturn {
   isInitialized: boolean;
   isTelegramApp: boolean;
   user: TelegramUser | null;
+  initData: string;
   themeParams: TelegramThemeParams;
   backgroundColor: string;
   textColor: string;
@@ -25,6 +26,7 @@ export interface UseTelegramReturn {
   showPopup: (title: string, message: string, buttons?:  CustomPopupButton[], callback?: (buttonId?: string) => void) => void;
   showAlert: (message: string, callback?: () => void) => void;
   showConfirm: (message: string, callback?: (confirmed: boolean) => void) => void;
+  openInvoice: (url: string, callback?: (status: 'paid' | 'cancelled' | 'failed' | 'pending') => void) => void;
   close: () => void;
   expand: () => void;
   setBackgroundColor: (color: string) => void;
@@ -44,6 +46,7 @@ export interface UseTelegramReturn {
 export const useTelegram = (): UseTelegramReturn => {
   const [isInitialized, setIsInitialized] = useState(false);
   const [user, setUser] = useState<TelegramUser | null>(null);
+  const [initData, setInitData] = useState('');
   const [themeParams, setThemeParams] = useState<TelegramThemeParams>({});
   const [backgroundColor, setBackgroundColorState] = useState('#ffffff');
   const [textColor, setTextColorState] = useState('#000000');
@@ -59,6 +62,7 @@ export const useTelegram = (): UseTelegramReturn => {
     try {
       telegramApi.init();
       setIsInitialized(true);
+      setInitData(telegramApi.getInitData());
       
       // Получаем данные пользователя
       const userData = telegramApi.getUser();
@@ -135,6 +139,10 @@ export const useTelegram = (): UseTelegramReturn => {
     telegramApi.showConfirm(message, callback);
   }, [telegramApi]);
 
+  const openInvoice = useCallback((url: string, callback?: (status: 'paid' | 'cancelled' | 'failed' | 'pending') => void) => {
+    telegramApi.openInvoice(url, callback);
+  }, [telegramApi]);
+
   // Методы управления приложением
   const close = useCallback(() => {
     telegramApi.close();
@@ -205,6 +213,7 @@ export const useTelegram = (): UseTelegramReturn => {
     isInitialized,
     isTelegramApp,
     user,
+    initData,
     themeParams,
     backgroundColor,
     textColor,
@@ -219,6 +228,7 @@ export const useTelegram = (): UseTelegramReturn => {
     showPopup,
     showAlert,
     showConfirm,
+    openInvoice,
     close,
     expand,
     setBackgroundColor,

@@ -2,7 +2,7 @@ import * as React from 'react';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import './index.css';
 import { useTelegram } from './telegram';
-import { LobbyClient, MovePayload, PlayerColor } from './net';
+import { LobbyClient, MovePayload, PlayerColor, ServerClock } from './net';
 
 interface ChessPiece {
   piece: string | null;
@@ -10,8 +10,17 @@ interface ChessPiece {
   hasMoved?: boolean;
 }
 
+function formatClock(milliseconds: number): string {
+  const totalSeconds = Math.ceil(Math.max(0, milliseconds) / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, '0')}`;
+}
+
 
 // Определяем initialBoard до его использования
+const DEFAULT_MATCH_TIME_MS = 10 * 60 * 1000;
+
 const initialBoard: ChessPiece[][] = [
   [
     { piece: "rook", color: 'black', hasMoved: false },
@@ -348,6 +357,16 @@ const ChessLobby: React.FC<ChessLobbyProps> = ({ roomId, onBackToMain }) => {
   const [currentTurn, setCurrentTurn] = useState<'white' | 'black'>('white');
   const [possibleMoves, setPossibleMoves] = useState<{row: number; col: number; type: 'move' | 'attack'}[]>([]);
   const [winner, setWinner] = useState<'white' | 'black' | null>(null);
+  const [internalStars, setInternalStars] = useState(0);
+  const [paymentPending, setPaymentPending] = useState(false);
+  const [stakeAmount, setStakeAmount] = useState(10);
+  const [opponentJoined, setOpponentJoined] = useState(false);
+  const [matchStarted, setMatchStarted] = useState(false);
+  const [serverClock, setServerClock] = useState<ServerClock | null>(null);
+  const [clockReceivedAt, setClockReceivedAt] = useState(0);
+  const [clockNow, setClockNow] = useState(() => performance.now());
+  const [endReason, setEndReason] = useState<'checkmate' | 'timeout'>('checkmate');
+  const [prizeAmount, setPrizeAmount] = useState(15);
   const [promotion, setPromotion] = useState<{
     fromRow: number;
     fromCol: number;
@@ -360,12 +379,56 @@ const ChessLobby: React.FC<ChessLobbyProps> = ({ roomId, onBackToMain }) => {
   // const [roomId, setRoomId] = useState<string>('');
   const [selfColor, setSelfColor] = useState<PlayerColor>('white');
   const lobbyRef = useRef<LobbyClient | null>(null);
+  const selfIdRef = useRef<string | null>(null);
+  const stakeInvoiceOpenedRef = useRef(false);
   const [inviteUrl, setInviteUrl] = useState<string>('');
   const boardContainerRef = useRef<HTMLDivElement | null>(null);
   const applyRemoteMoveRef = useRef<((payload: MovePayload) => void) | null>(null);
 
   // Инициализация Telegram API
   const telegram = useTelegram();
+
+  const refreshInternalBalance = useCallback(async () => {
+    const userId = telegram.user?.id;
+    if (!userId) return;
+
+    let apiBase = (import.meta as any).env?.VITE_API_BASE?.trim();
+    if (!apiBase && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+      apiBase = 'http://localhost:3000';
+    }
+    if (!apiBase) return;
+
+    try {
+      const response = await fetch(`${apiBase.replace(/\/$/, '')}/api/balance`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, initData: telegram.initData }),
+      });
+      if (!response.ok) throw new Error(`Balance request failed: ${response.status}`);
+      const data: { balance: number } = await response.json();
+      setInternalStars(data.balance);
+    } catch (error) {
+      console.error('Не удалось загрузить баланс внутренних Stars:', error);
+    }
+  }, [telegram.initData, telegram.user?.id]);
+
+  useEffect(() => {
+    void refreshInternalBalance();
+  }, [refreshInternalBalance]);
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => setClockNow(performance.now()), 250);
+    return () => window.clearInterval(intervalId);
+  }, []);
+
+  const remainingTime = (color: PlayerColor): number => {
+    if (!serverClock) return DEFAULT_MATCH_TIME_MS;
+    const storedTime = color === 'white' ? serverClock.whiteTimeMs : serverClock.blackTimeMs;
+    if (!serverClock.started || serverClock.status !== 'active' || serverClock.currentTurn !== color
+      || !serverClock.turnStartedAt) return storedTime;
+    const elapsedAtSnapshot = Math.max(0, serverClock.serverTime - new Date(serverClock.turnStartedAt).getTime());
+    return Math.max(0, storedTime - elapsedAtSnapshot - (clockNow - clockReceivedAt));
+  };
 
   // Настройка Telegram приложения
   useEffect(() => {
@@ -412,10 +475,20 @@ const ChessLobby: React.FC<ChessLobbyProps> = ({ roomId, onBackToMain }) => {
       const res = await fetch(`${apiBase}/rooms/${encodeURIComponent(roomId)}/events`);
       if (!res.ok) return;
       const data = await res.json();
+      if (data.clock) {
+        setServerClock(data.clock);
+        setClockReceivedAt(performance.now());
+        setMatchStarted(data.clock.started);
+        setCurrentTurn(data.clock.currentTurn);
+        setStakeAmount(data.clock.stake);
+        setPrizeAmount(data.clock.prize);
+      }
       // data.events: [{ message: NetMessage }]
       let curBoard: ChessPiece[][] = initialBoard.map(row => row.map(cell => ({ ...cell })));
       let curTurn: 'white' | 'black' = 'white';
       let gameWinner: 'white' | 'black' | null = null;
+      let restoredEndReason: 'checkmate' | 'timeout' = 'checkmate';
+      let restoredPrize = 15;
       for (const evt of data.events) {
         const msg = evt.message || evt; // evt может быть либо {message}, либо сразу NetMessage
         if (msg.type === 'move') {
@@ -450,22 +523,146 @@ const ChessLobby: React.FC<ChessLobbyProps> = ({ roomId, onBackToMain }) => {
           curTurn = curTurn === 'white' ? 'black' : 'white';
         } else if (msg.type === 'game_end' && msg.payload?.winner) {
           gameWinner = msg.payload.winner;
+          restoredEndReason = msg.payload.reason;
+          restoredPrize = msg.payload.prize;
         }
       }
       setBoard(curBoard.map(row => row.map(cell => ({ ...cell }))));
       setCurrentTurn(curTurn);
-      setWinner(gameWinner);
+      if (gameWinner) {
+        setWinner(gameWinner);
+        setEndReason(restoredEndReason);
+        setPrizeAmount(restoredPrize);
+      }
     } catch (e) {
       // Ошибка загрузки — оставляем начальное состояние
     }
   }, []);
 
+  const startMatch = useCallback(async () => {
+    if (!telegram.user?.id) return;
+    const apiBase = (import.meta as any).env?.VITE_API_BASE?.trim()
+      || (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'http://localhost:3000' : '');
+    if (!apiBase) return;
+
+    try {
+      const response = await fetch(`${apiBase.replace(/\/$/, '')}/api/matches/${encodeURIComponent(roomId)}/start`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: String(telegram.user.id), initData: telegram.initData }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        if (response.status === 409) {
+          telegram.showAlert('Оба игрока должны иметь не менее 10 внутренних звёзд.');
+          return;
+        }
+        throw new Error(data.error || `Match start failed: ${response.status}`);
+      }
+      if (typeof data.stake === 'number') {
+        setStakeAmount(data.stake);
+        setPrizeAmount(Math.round(data.stake * 1.5));
+      }
+      setMatchStarted(true);
+      await refreshInternalBalance();
+    } catch (error) {
+      console.error('Не удалось начать матч:', error);
+      telegram.showAlert('Не удалось начать матч. Попробуйте ещё раз.');
+    }
+  }, [refreshInternalBalance, roomId, telegram.initData, telegram.showAlert, telegram.user?.id]);
+
+  const waitForPayment = useCallback(async (payload: string, apiBase: string) => {
+    setPaymentPending(true);
+    try {
+      for (let attempt = 0; attempt < 20; attempt += 1) {
+        const response = await fetch(`${apiBase.replace(/\/$/, '')}/api/payments/stars/status`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ payload, userId: String(telegram.user?.id), initData: telegram.initData }),
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || `Payment status failed: ${response.status}`);
+        if (result.confirmed) {
+          setInternalStars(result.balance);
+          await startMatch();
+          return;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+      }
+      telegram.showAlert('Telegram ещё подтверждает платёж. Баланс не потерян; через несколько секунд проверьте ставку ещё раз.');
+    } catch (error) {
+      console.error('Ошибка проверки оплаты:', error);
+      telegram.showAlert('Оплата ещё подтверждается. Через несколько секунд проверьте ставку снова.');
+    } finally {
+      setPaymentPending(false);
+    }
+  }, [startMatch, telegram.initData, telegram.showAlert, telegram.user?.id]);
+
+  const requestStakeInvoice = useCallback(async () => {
+    if (!telegram.isTelegramApp || !telegram.user?.id) return;
+
+    let apiBase = (import.meta as any).env?.VITE_API_BASE?.trim();
+    if (!apiBase && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+      apiBase = 'http://localhost:3000';
+    }
+    if (!apiBase) {
+      telegram.showAlert('Не удалось определить адрес сервера оплаты.');
+      return;
+    }
+
+    try {
+      const response = await fetch(`${apiBase.replace(/\/$/, '')}/api/payments/stars/invoice`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          roomId,
+          userId: String(telegram.user.id),
+          initData: telegram.initData,
+        }),
+      });
+      if (!response.ok) throw new Error(`Invoice request failed: ${response.status}`);
+
+      const { invoiceUrl, payload, funded, balance, amount } = await response.json();
+      if (typeof balance === 'number') setInternalStars(balance);
+      if (typeof amount === 'number') setStakeAmount(amount);
+      if (funded) {
+        await startMatch();
+        return;
+      }
+      if (typeof invoiceUrl !== 'string' || typeof payload !== 'string') {
+        throw new Error('Invoice data is missing');
+      }
+
+      telegram.openInvoice(invoiceUrl, (status) => {
+        if (status === 'cancelled') {
+          setPaymentPending(false);
+          return;
+        }
+        if (status === 'failed') {
+          setPaymentPending(false);
+          telegram.showAlert('Telegram не завершил оплату. Повторите попытку.');
+          return;
+        }
+        if (status === 'paid' || status === 'pending') void waitForPayment(payload, apiBase);
+      });
+    } catch (error) {
+      console.error('Не удалось создать счёт Telegram Stars:', error);
+      telegram.showAlert('Не удалось создать пополнение внутреннего баланса.');
+    }
+  }, [roomId, startMatch, telegram.initData, telegram.isTelegramApp, telegram.openInvoice, telegram.showAlert, telegram.user?.id, waitForPayment]);
+
   // Инициализация лобби/комнаты
   useEffect(() => {
     if (!telegram.isInitialized || !roomId) return;
+    stakeInvoiceOpenedRef.current = false;
+    setOpponentJoined(false);
+    setWinner(null);
+    setMatchStarted(false);
+    setServerClock(null);
     restoreGameState(roomId);
 
     const meId = String(telegram.user?.id ?? (typeof crypto !== 'undefined' ? crypto.randomUUID() : Math.random().toString(36).slice(2)));
+    selfIdRef.current = meId;
     const meName = telegram.user?.username || telegram.user?.first_name || 'Player';
 
     // Если мы зашли по приглашению (есть start_param) — будем играть чёрными, иначе белыми
@@ -480,10 +677,40 @@ const ChessLobby: React.FC<ChessLobbyProps> = ({ roomId, onBackToMain }) => {
       roomId: roomId,
       self: { userId: meId, displayName: meName },
       selfColor: color,
+      initData: telegram.initData,
       events: {
+        onOpponentJoined: () => {
+          setOpponentJoined(true);
+          if (stakeInvoiceOpenedRef.current) return;
+          stakeInvoiceOpenedRef.current = true;
+          void requestStakeInvoice();
+        },
         onMove: (_opponent, payload) => {
           // Применяем ход соперника через ref, чтобы не терять актуальное состояние
           applyRemoteMoveRef.current && applyRemoteMoveRef.current(payload);
+        },
+        onClock: (clock) => {
+          setServerClock(clock);
+          setClockReceivedAt(performance.now());
+          setStakeAmount(clock.stake);
+          setPrizeAmount(clock.prize);
+          if (clock.started) {
+            setMatchStarted(true);
+            setCurrentTurn(clock.currentTurn);
+          }
+        },
+        onMatchStarted: () => {
+          setMatchStarted(true);
+          void refreshInternalBalance();
+        },
+        onGameEnd: (winningColor, reason, prize) => {
+          setWinner(winningColor);
+          setEndReason(reason);
+          setPrizeAmount(prize);
+          void refreshInternalBalance();
+          if (winningColor === color && telegram.isTelegramApp) {
+            telegram.showAlert(`Вы победили! Начислено ${prize} внутренних звёзд.`);
+          }
         },
       },
     });
@@ -500,32 +727,10 @@ const ChessLobby: React.FC<ChessLobbyProps> = ({ roomId, onBackToMain }) => {
       lobbyRef.current = null;
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [telegram.isInitialized, roomId, telegram.startParam]);
+  }, [telegram.isInitialized, telegram.initData, roomId, telegram.startParam, requestStakeInvoice, restoreGameState, refreshInternalBalance, telegram.isTelegramApp, telegram.showAlert]);
 
   // Функция для обработки победы
-  const handleWin = useCallback((winner: 'white' | 'black') => {
-    setWinner(winner);
-    
-    // Отправляем событие о завершении игры
-    if (lobbyRef.current) {
-      lobbyRef.current.sendMessage({
-        type: 'game_end',
-        roomId: roomId,
-        senderId: String(telegram.user?.id),
-        payload: { winner }
-      });
-    }
-    
-    // Показываем уведомление в Telegram
-    if (telegram.isTelegramApp) {
-      telegram.showAlert(
-        `${winner === 'white' ? 'Белые' : 'Черные'} победили! Мат!`,
-        () => {
-          telegram.hideMainButton();
-        }
-      );
-    }
-  }, [telegram, roomId]);
+  const handleWin = useCallback((_winner: 'white' | 'black') => {}, []);
 
   // Добавляем функцию проверки на мат
   const isCheckmate = useCallback((color: 'white' | 'black'): boolean => {
@@ -680,7 +885,7 @@ const ChessLobby: React.FC<ChessLobbyProps> = ({ roomId, onBackToMain }) => {
   }, [promotion, board, isCheckmate, handleWin]);
 
   const handleMouseDown = useCallback((e: React.MouseEvent<HTMLImageElement>, row: number, col: number) => {
-    if (promotion) return; // Блокируем действия во время выбора превращения
+    if (!matchStarted || winner || promotion) return;
     const piece = board[row][col];
     if (!piece.piece || piece.color !== currentTurn || piece.color !== selfColor) return;
     
@@ -716,7 +921,7 @@ const ChessLobby: React.FC<ChessLobbyProps> = ({ roomId, onBackToMain }) => {
     // Позиционируем фигуру, учитывая точку захвата
     element.style.left = `${e.clientX - offsetX}px`;
     element.style.top = `${e.clientY - offsetY}px`;
-  }, [board, currentTurn, selfColor, showPossibleMoves]);
+  }, [board, currentTurn, selfColor, matchStarted, winner, promotion, showPossibleMoves]);
 
   const handleMouseUp = useCallback((e: React.MouseEvent<HTMLImageElement>) => {
     if (!selectedPiece || !selectedPiece.element) return;
@@ -826,7 +1031,7 @@ const ChessLobby: React.FC<ChessLobbyProps> = ({ roomId, onBackToMain }) => {
   }, [selectedPiece, handleMouseUp]);
 
   const handleTouchStart = useCallback((e: React.TouchEvent<HTMLImageElement>, row: number, col: number) => {
-    if (promotion) return; // Блокируем действия во время выбора превращения
+    if (!matchStarted || winner || promotion) return;
     const piece = board[row][col];
     if (!piece.piece || piece.color !== currentTurn || piece.color !== selfColor) return;
     
@@ -863,7 +1068,7 @@ const ChessLobby: React.FC<ChessLobbyProps> = ({ roomId, onBackToMain }) => {
     // Позиционируем фигуру, учитывая точку захвата
     element.style.left = `${touch.clientX - offsetX}px`;
     element.style.top = `${touch.clientY - offsetY}px`;
-  }, [board, currentTurn, selfColor, showPossibleMoves]);
+  }, [board, currentTurn, selfColor, matchStarted, winner, promotion, showPossibleMoves]);
 
   const handleTouchMove = useCallback((e: React.TouchEvent<HTMLImageElement>) => {
     e.preventDefault();
@@ -1097,6 +1302,24 @@ const ChessLobby: React.FC<ChessLobbyProps> = ({ roomId, onBackToMain }) => {
         {roomId && (
           <div className="mb-3 text-sm text-gray-700 break-words">
             Комната: <span className="font-mono">{roomId}</span>
+            {telegram.user?.id && (
+              <span className="ml-3 font-semibold">Внутренние звёзды: {internalStars}</span>
+            )}
+            {opponentJoined && (
+              <p className="mt-2 font-semibold text-gray-900">Опонент присоединился, внесите ставку</p>
+            )}
+            {paymentPending && (
+              <p className="mt-2" role="status" aria-live="polite">Подтверждаем оплату в Telegram…</p>
+            )}
+            {opponentJoined && !matchStarted && telegram.isTelegramApp && (
+              <button
+                className="mt-2 bg-emerald-700 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                onClick={() => void requestStakeInvoice()}
+                disabled={paymentPending}
+              >
+                {paymentPending ? 'Проверяем оплату…' : internalStars >= stakeAmount ? 'Проверить ставку и начать' : `Пополнить на ${stakeAmount} звёзд`}
+              </button>
+            )}
             {inviteUrl && (
               <div className="mt-2 flex items-center justify-center gap-2">
                 <button
@@ -1129,7 +1352,10 @@ const ChessLobby: React.FC<ChessLobbyProps> = ({ roomId, onBackToMain }) => {
             <h2 className="text-3xl font-bold mb-4">
               {winner === 'white' ? 'Белые' : 'Черные'} победили!
             </h2>
-            <p className="text-xl mb-4">Мат!</p>
+            <p className="text-xl mb-4">{endReason === 'timeout' ? 'Время соперника истекло.' : 'Мат!'}</p>
+            {winner === selfColor && (
+              <p className="mb-4">Начислено {prizeAmount} внутренних звёзд. Баланс: {internalStars}</p>
+            )}
             <button
               className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
               onClick={() => window.location.reload()}
@@ -1139,6 +1365,15 @@ const ChessLobby: React.FC<ChessLobbyProps> = ({ roomId, onBackToMain }) => {
           </div>
         </div>
       )}
+      <div className="mb-3 flex w-full max-w-[800px] justify-between px-4 font-mono text-lg font-bold">
+        <span className={matchStarted && currentTurn === 'white' ? 'text-emerald-700' : 'text-gray-700'}>
+          Белые {formatClock(remainingTime('white'))}
+        </span>
+        <span className="text-gray-600">Ставка {stakeAmount} · приз {Math.round(stakeAmount * 1.5)}</span>
+        <span className={matchStarted && currentTurn === 'black' ? 'text-emerald-700' : 'text-gray-700'}>
+          Чёрные {formatClock(remainingTime('black'))}
+        </span>
+      </div>
       <div ref={boardContainerRef} className={`relative w-[100vw] max-w-[504px] md:max-w-[672px] lg:max-w-[800px] aspect-square touch-none`}>
         <div className={`grid grid-cols-8 border-4 border-gray-800 bg-white absolute inset-0 ${selfColor === 'black' ? '' : ''}`}>
           {(() => {

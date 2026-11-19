@@ -1,4 +1,4 @@
-import { NetMessage, Transport } from './types';
+import { NetMessage, ServerClock, Transport } from './types';
 
 /**
  * Транспорт поверх REST API. send() делает POST /events, onMessage запускает polling /events/stream.
@@ -6,12 +6,15 @@ import { NetMessage, Transport } from './types';
  */
 export class RestTransport implements Transport {
   private baseUrl: string;
+  private initData: string;
   private roomId: string | null = null;
   private onMessageHandler: ((message: NetMessage) => void) | null = null;
+  private onClockHandler: ((clock: ServerClock) => void) | null = null;
   private polling = false;
 
-  constructor(baseUrl: string) {
+  constructor(baseUrl: string, initData = '') {
     this.baseUrl = baseUrl.trim().replace(/\/$/, '');
+    this.initData = initData;
   }
 
   connect(channelName: string): void {
@@ -27,15 +30,20 @@ export class RestTransport implements Transport {
 
   async send(message: NetMessage): Promise<void> {
     if (!this.roomId) throw new Error('Not connected');
-    await fetch(`${this.baseUrl}/rooms/${encodeURIComponent(this.roomId)}/events`, {
+    const response = await fetch(`${this.baseUrl}/rooms/${encodeURIComponent(this.roomId)}/events`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(message),
+      body: JSON.stringify({ ...message, initData: this.initData }),
     });
+    if (!response.ok) throw new Error(`Room event failed: ${response.status}`);
   }
 
   onMessage(handler: (message: NetMessage) => void): void {
     this.onMessageHandler = handler;
+  }
+
+  onClock(handler: (clock: ServerClock) => void): void {
+    this.onClockHandler = handler;
   }
 
   private async startPolling(): Promise<void> {
@@ -49,11 +57,13 @@ export class RestTransport implements Transport {
           headers: { 'Accept': 'application/json' },
         });
         if (!res.ok) throw new Error('Polling failed');
-        const data: { events: Array<{ id: string; message: NetMessage }> } = await res.json();
+        const data: { events: Array<{ id: string; message: NetMessage }>; clock?: ServerClock } = await res.json();
+        if (data.clock) this.onClockHandler?.(data.clock);
         for (const evt of data.events) {
           lastEventId = evt.id;
           if (this.onMessageHandler) this.onMessageHandler(evt.message);
         }
+        await new Promise((resolve) => setTimeout(resolve, 750));
       } catch (_err) {
         await new Promise(r => setTimeout(r, 1000));
       }
