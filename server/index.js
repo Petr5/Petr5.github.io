@@ -39,9 +39,9 @@ async function initDb() {
       ALTER TABLE rooms 
       ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
     `);
-    console.log('Added created_at column if it did not exist.');
+    // console.log('Added created_at column if it did not exist.');
   } catch (error) {
-    console.log('Column created_at might already exist or error adding it:', error.message);
+    // console.log('Column created_at might already exist or error adding it:', error.message);
   }
   
   try {
@@ -49,9 +49,9 @@ async function initDb() {
       ALTER TABLE rooms 
       ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'active';
     `);
-    console.log('Added status column if it did not exist.');
+    // console.log('Added status column if it did not exist.');
   } catch (error) {
-    console.log('Column status might already exist or error adding it:', error.message);
+    // console.log('Column status might already exist or error adding it:', error.message);
   }
 
   try {
@@ -59,12 +59,12 @@ async function initDb() {
       ALTER TABLE rooms 
       ADD COLUMN IF NOT EXISTS player_names JSONB NOT NULL DEFAULT '{}';
     `);
-    console.log('Added player_names column if it did not exist.');
+    // console.log('Added player_names column if it did not exist.');
   } catch (error) {
-    console.log('Column player_names might already exist or error adding it:', error.message);
+    // console.log('Column player_names might already exist or error adding it:', error.message);
   }
   
-  console.log('Database initialized successfully.');
+  // console.log('Database initialized successfully.');
 }
 
 function ensureParsedJsonb(value, defaultValue) {
@@ -89,11 +89,11 @@ async function ensureRoom(roomId) {
     const res = await client.query('SELECT * FROM rooms WHERE id = $1', [roomId]);
     if (res.rows.length > 0) {
       roomData = res.rows[0];
-      console.log(`[ensureRoom] Fetched room ${roomId} from DB:`, roomData.events, roomData.players, roomData.player_names);
+      // console.log(`[ensureRoom] Fetched room ${roomId} from DB:`, roomData.events, roomData.players, roomData.player_names);
       roomData.events = ensureParsedJsonb(roomData.events, []);
       roomData.players = ensureParsedJsonb(roomData.players, {});
       roomData.player_names = ensureParsedJsonb(roomData.player_names, {});
-      console.log(`[ensureRoom] Parsed room ${roomId} from DB:`, roomData.events, roomData.players, roomData.player_names);
+      // console.log(`[ensureRoom] Parsed room ${roomId} from DB:`, roomData.events, roomData.players, roomData.player_names);
     } else {
       // Create new room
       roomData = {
@@ -108,7 +108,7 @@ async function ensureRoom(roomId) {
         'INSERT INTO rooms (id, events, last_id, current_turn, players, player_names) VALUES ($1, $2, $3, $4, $5, $6)',
         [roomData.id, JSON.stringify(roomData.events), roomData.last_id, roomData.current_turn, JSON.stringify(roomData.players), JSON.stringify(roomData.player_names)]
       );
-      console.log(`[ensureRoom] Created new room ${roomId} in DB.`);
+      // console.log(`[ensureRoom] Created new room ${roomId} in DB.`);
     }
   } catch (error) {
     console.error(`[ensureRoom] Error processing room ${roomId}:`, error);
@@ -129,15 +129,15 @@ async function ensureRoom(roomId) {
 async function updateRoom(room) {
   const client = await pool.connect();
   try {
-    console.log(`[updateRoom] Attempting to update room ${room.id}. Events count: ${room.events.length}, Last ID: ${room.lastId}`);
-    console.log(`[updateRoom] Events to save (stringified): ${JSON.stringify(room.events)}`);
-    console.log(`[updateRoom] Players to save (stringified): ${JSON.stringify(room.players)}`);
+    // console.log(`[updateRoom] Attempting to update room ${room.id}. Events count: ${room.events.length}, Last ID: ${room.lastId}`);
+    // console.log(`[updateRoom] Events to save (stringified): ${JSON.stringify(room.events)}`);
+    // console.log(`[updateRoom] Players to save (stringified): ${JSON.stringify(room.players)}`);
 
     await client.query(
       'UPDATE rooms SET events = $1, last_id = $2, current_turn = $3, players = $4 WHERE id = $5',
       [JSON.stringify(room.events), room.lastId, room.currentTurn, JSON.stringify(room.players), room.id]
     );
-    console.log(`[updateRoom] Successfully updated room ${room.id}.`);
+    // console.log(`[updateRoom] Successfully updated room ${room.id}.`);
   } catch (error) {
     console.error(`[updateRoom] Error updating room ${room.id}:`, error);
   } finally {
@@ -146,12 +146,12 @@ async function updateRoom(room) {
 }
 
 async function addEvent(room, message) {
-  console.log(`[addEvent] Room ${room.id}. Before push: events count=${room.events.length}, lastId=${room.lastId}`);
+  // console.log(`[addEvent] Room ${room.id}. Before push: events count=${room.events.length}, lastId=${room.lastId}`);
   room.lastId += 1;
   const id = String(room.lastId);
   room.events.push({ id, message });
-  console.log(`[addEvent] Room ${room.id}. After push: events count=${room.events.length}, lastId=${room.lastId}, new event ID=${id}`);
-  console.log(`[addEvent] Room ${room.id}. Events array state:`, room.events);
+  // console.log(`[addEvent] Room ${room.id}. After push: events count=${room.events.length}, lastId=${room.lastId}, new event ID=${id}`);
+  // console.log(`[addEvent] Room ${room.id}. Events array state:`, room.events);
 
   await updateRoom(room); // Save updated room state to DB
   return id;
@@ -227,15 +227,15 @@ app.post('/rooms/:roomId/events', async (req, res) => {
     if (type === 'presence') {
       const desired = message.payload?.desiredColor;
       const playerName = message.payload?.displayName;
-      
+      // console.log(`[presence] room=${roomId} sender=${senderId} desired=${desired} !!!playerName=${playerName}`);
       if (message.payload?.joined) {
-        if (!room.players.white && desired === 'white') {
+        if (desired === 'white') {
           room.players.white = senderId;
           if (playerName) {
             room.player_names = room.player_names || {};
             room.player_names.white = playerName;
           }
-        } else if (!room.players.black && desired === 'black') {
+        } else if (desired === 'black') {
           room.players.black = senderId;
           if (playerName) {
             room.player_names = room.player_names || {};
@@ -243,17 +243,24 @@ app.post('/rooms/:roomId/events', async (req, res) => {
           }
         }
       }
-      
+    
       // Обновляем базу данных с новыми данными игроков
       await client.query(
         'UPDATE rooms SET players = $1, player_names = $2 WHERE id = $3',
         [JSON.stringify(room.players), JSON.stringify(room.player_names || {}), roomId]
       );
-      
+    
       const id = await addEvent(room, message);
-      console.log(`[presence] room=${roomId} id=${id} sender=${senderId} desired=${desired} players=`, room.players, 'names=', room.player_names);
+      console.log(
+        `[presence] room=${roomId} id=${id} sender=${senderId} desired=${desired} players=`,
+        room.players,
+        'names=',
+        room.player_names
+      );
+    
       return res.status(201).json({ id });
     }
+    
 
     // Move handling with strict turn order
     if (type === 'move') {
@@ -271,7 +278,7 @@ app.post('/rooms/:roomId/events', async (req, res) => {
       room.currentTurn = turn === 'white' ? 'black' : 'white'; 
     
       const id = await addEvent(room, message);
-      console.log(`[move] room=${roomId} id=${id} sender=${senderId} nextTurn=${room.currentTurn}`);
+      // console.log(`[move] room=${roomId} id=${id} sender=${senderId} nextTurn=${room.currentTurn}`);
       return res.status(201).json({ id });
     }
 
@@ -284,7 +291,7 @@ app.post('/rooms/:roomId/events', async (req, res) => {
           'UPDATE rooms SET status = $1 WHERE id = $2',
           ['finished', roomId]
         );
-        console.log(`[game_end] Updated room ${roomId} status to finished`);
+        // console.log(`[game_end] Updated room ${roomId} status to finished`);
       } catch (error) {
         console.error(`[game_end] Error updating room status:`, error);
       } finally {
@@ -292,13 +299,13 @@ app.post('/rooms/:roomId/events', async (req, res) => {
       }
       
       const id = await addEvent(room, message);
-      console.log(`[game_end] room=${roomId} id=${id} sender=${senderId} winner=${message.payload?.winner}`);
+      // console.log(`[game_end] room=${roomId} id=${id} sender=${senderId} winner=${message.payload?.winner}`);
       return res.status(201).json({ id });
     }
 
     // Unknown types still recorded
     const id = await addEvent(room, message);
-    console.log(`[event] room=${roomId} id=${id} type=${type}`);
+    // console.log(`[event] room=${roomId} id=${id} type=${type}`);
     return res.status(201).json({ id });
   } catch (error) {
     console.error(`[POST /rooms/:roomId/events] Error handling request for room ${req.params.roomId}:`, error);
@@ -319,17 +326,17 @@ app.get('/rooms/:roomId/events', async (req, res) => {
     }
 
     if (!afterId) {
-      console.log(`[events] room=${roomId} full size=${room.events.length}`);
+      // console.log(`[events] room=${roomId} full size=${room.events.length}`);
       return res.json({ events: room.events });
     }
 
     const idx = room.events.findIndex(e => e.id === afterId);
     if (idx === -1) {
-      console.log(`[events] room=${roomId} from start (after not found) size=${room.events.length}`);
+      // console.log(`[events] room=${roomId} from start (after not found) size=${room.events.length}`);
       return res.json({ events: room.events });
     }
     const slice = room.events.slice(idx + 1);
-    console.log(`[events] room=${roomId} after=${afterId} size=${slice.length}`);
+    // console.log(`[events] room=${roomId} after=${afterId} size=${slice.length}`);
     return res.json({ events: slice });
   } catch (error) {
     console.error(`[GET /rooms/:roomId/events] Error handling request for room ${req.params.roomId}:`, error);
@@ -339,7 +346,7 @@ app.get('/rooms/:roomId/events', async (req, res) => {
 
 initDb().then(() => {
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Chess events server listening on http://localhost:${PORT}`);
+    // console.log(`Chess events server listening on http://localhost:${PORT}`);
   });
 }).catch(err => {
   console.error('Failed to initialize database:', err);
